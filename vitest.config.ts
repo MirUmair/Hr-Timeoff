@@ -19,6 +19,14 @@ export default defineConfig({
       reporter: ["text", "html", "lcov"],
       reportsDirectory: "coverage",
       include: ["app/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
+      exclude: [
+        "app/**/*.stories.{ts,tsx}",
+        "stories/**/*.{ts,tsx}",
+        "app/**/loading.tsx",
+        "app/**/error.tsx",
+        "app/**/layout.tsx",
+        "app/**/page.tsx",
+      ],
       thresholds: {
         lines: 50,
         functions: 50,

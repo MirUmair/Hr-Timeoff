@@ -1,0 +1,4 @@
+interface:
+  display_name: "ExampleHR Next.js Workflow"
+  short_description: "Work safely in this Next.js 16 app"
+  default_prompt: "Use $examplehr-nextjs-workflow to modify routes, components, or data flow in this app."

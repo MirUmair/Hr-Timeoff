@@ -8,6 +8,7 @@ import type {
 import type {
   ApproveTimeOffRequestInput,
   CreateTimeOffRequestInput,
+  DenyTimeOffRequestInput,
   HcmErrorResponse,
   TimeOffRequestsResponse,
   TimeOffRequestWriteResponse,
@@ -123,6 +124,15 @@ export function approveTimeOffRequest(
   input: ApproveTimeOffRequestInput,
 ): Promise<TimeOffRequestWriteResponse> {
   return requestJson<TimeOffRequestWriteResponse>("/api/hcm/manager/approve", {
+    method: "POST",
+    json: input,
+  });
+}
+
+export function denyTimeOffRequest(
+  input: DenyTimeOffRequestInput,
+): Promise<TimeOffRequestWriteResponse> {
+  return requestJson<TimeOffRequestWriteResponse>("/api/hcm/manager/deny", {
     method: "POST",
     json: input,
   });

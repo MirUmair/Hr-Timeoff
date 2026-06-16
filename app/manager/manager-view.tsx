@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import {
   approveTimeOffRequest,
+  denyTimeOffRequest,
   fetchBalance,
   fetchBalances,
   fetchTimeOffRequests,
@@ -31,6 +32,7 @@ type ApprovalState =
   | "verifying"
   | "blocked"
   | "confirmed"
+  | "denied"
   | "conflict";
 
 type ManagerViewProps = {
@@ -51,6 +53,7 @@ const stateClass: Record<ApprovalState, string> = {
   verifying: "border-blue-200 bg-blue-50 text-blue-800",
   blocked: "border-orange-300 bg-orange-50 text-orange-900",
   confirmed: "border-teal-200 bg-teal-50 text-teal-900",
+  denied: "border-slate-200 bg-slate-50 text-slate-900",
   conflict: "border-red-300 bg-red-50 text-red-900",
 };
 
@@ -149,6 +152,14 @@ export function ManagerView({
   initialBalances,
   initialRequests,
 }: ManagerViewProps) {
+  const shell = "mx-auto w-full max-w-[1420px] px-4 py-7 sm:px-6 lg:px-8";
+  const surface =
+    "rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-[var(--shadow)] ring-1 ring-white/70 backdrop-blur";
+  const surfaceSoft =
+    "rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--shadow-soft)] ring-1 ring-white/80";
+  const fieldClass =
+    "w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[color:var(--foreground)] outline-none transition focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[rgba(30,138,154,0.14)]";
+
   const queryClient = useQueryClient();
   const [behaviorByRequest, setBehaviorByRequest] = useState<
     Partial<Record<string, ApprovalBehavior>>
@@ -170,12 +181,18 @@ export function ManagerView({
   const approvalMutation = useMutation({
     mutationFn: approveTimeOffRequest,
   });
+  const denialMutation = useMutation({
+    mutationFn: denyTimeOffRequest,
+  });
 
   const pendingRequests = requestsQuery.data.requests.filter(
     (request) => request.status === "pending",
   );
   const approvedRequests = requestsQuery.data.requests.filter(
     (request) => request.status === "approved",
+  );
+  const rejectedRequests = requestsQuery.data.requests.filter(
+    (request) => request.status === "rejected",
   );
 
   async function handleApprove(request: TimeOffRequest) {
@@ -285,37 +302,103 @@ export function ManagerView({
     }
   }
 
+  async function handleDeny(request: TimeOffRequest) {
+    setRequestState((current) => ({
+      ...current,
+      [request.id]: {
+        approvalState: "verifying",
+        message: "Sending denial to HCM and releasing the pending balance.",
+      },
+    }));
+
+    try {
+      const denial = await denialMutation.mutateAsync({
+        requestId: request.id,
+        managerId: "mgr-9001",
+        expectedRequestVersion: request.version,
+        reason: "Manager denied after review.",
+      });
+
+      queryClient.setQueryData<TimeOffRequestsResponse>(
+        queryKeys.timeOffRequests(),
+        replaceRequest(requestsQuery.data, denial.request),
+      );
+
+      const confirmedBalance = await fetchBalance(
+        denial.request.employeeId,
+        denial.request.leaveType,
+      );
+
+      queryClient.setQueryData<BatchBalancesResponse>(
+        queryKeys.balances(employeeIds),
+        replaceBalance(balancesQuery.data, confirmedBalance.balance),
+      );
+      setRequestState((current) => ({
+        ...current,
+        [request.id]: {
+          approvalState: "denied",
+          message: "Denial confirmed by HCM and pending balance released.",
+          verifiedBalanceVersion: confirmedBalance.balance.version,
+        },
+      }));
+    } catch (error) {
+      setRequestState((current) => ({
+        ...current,
+        [request.id]: {
+          approvalState:
+            error instanceof HcmClientError && error.payload.error.code === "CONFLICT"
+              ? "conflict"
+              : "blocked",
+          message:
+            error instanceof HcmClientError && error.payload.error.code === "CONFLICT"
+              ? `Recoverable conflict. ${getErrorMessage(error)} Refresh the queue and retry.`
+              : getErrorMessage(error),
+        },
+      }));
+    }
+  }
+
   return (
-    <main className="min-h-screen bg-[#eef2ec] text-[#18211f]">
-      <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="grid gap-4 border-b border-[#b6c2b7] pb-5 lg:grid-cols-[1fr_auto]">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#54635b]">
-              ExampleHR Manager View
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-normal">
-              Approval queue
-            </h1>
-            <Link
-              href="/"
-              className="mt-3 inline-flex border border-[#748271] bg-[#fbfff8] px-3 py-2 text-sm font-semibold transition hover:border-[#18211f]"
-            >
-              Back to employee view
-            </Link>
-          </div>
-          <div className="border border-[#b6c2b7] bg-[#fbfff8] px-4 py-3 text-sm shadow-sm">
-            <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#54635b]">
-              Approval rule
-            </span>
-            <span className="mt-1 block font-medium">
-              Verify latest HCM balance before every approval.
-            </span>
+    <main className="relative min-h-screen overflow-hidden text-[color:var(--foreground)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.9),_transparent_31%),radial-gradient(circle_at_12%_10%,_rgba(30,138,154,0.12),_transparent_24%)]" />
+      <section className={shell + " relative z-10 space-y-6"}>
+        <header className={`${surface} relative overflow-hidden p-5 md:p-7`}>
+          <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,var(--accent),#1e8a9a,var(--accent-warm))]" />
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="font-mono-ui text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--accent-warm)]">
+                ExampleHR manager workspace
+              </p>
+              <h1 className="font-display mt-3 text-4xl leading-[0.98] font-semibold tracking-tight text-[color:var(--foreground)] sm:text-5xl">
+                Approval queue
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-[color:var(--muted)] sm:text-base">
+                Verify the live balance context before every decision so approvals stay aligned with the source of truth.
+              </p>
+              <Link
+                href="/"
+                className="mt-6 inline-flex items-center justify-center rounded-xl border border-[color:var(--border-strong)] bg-white px-4 py-2.5 text-sm font-semibold text-[color:var(--foreground)] transition hover:-translate-y-0.5 hover:border-[color:var(--accent)] hover:bg-[#f7fbfd]"
+              >
+                Back to employee view
+              </Link>
+            </div>
+            <div className="min-w-[290px] rounded-3xl bg-[color:var(--accent)] p-5 text-white shadow-[0_24px_48px_-32px_rgba(11,74,95,0.75)]">
+              <p className="font-mono-ui text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100">
+                Approval rule
+              </p>
+              <p className="mt-3 text-sm leading-6 text-white/90">
+                Verify latest HCM balance before every approval.
+              </p>
+              <div className="mt-5 rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-cyan-100">
+                Queue decisions are blocked whenever the balance or request version drifts.
+              </div>
+            </div>
           </div>
         </header>
 
         <section className="grid gap-4">
           {pendingRequests.length === 0 ? (
-            <div className="border border-[#b6c2b7] bg-[#fbfff8] px-4 py-8 text-sm text-[#54635b]">
+            <div className={`${surface} px-5 py-10 text-sm text-[color:var(--muted)]`}>
               No pending requests in the manager queue.
             </div>
           ) : (
@@ -329,66 +412,72 @@ export function ManagerView({
               );
               const canApprove =
                 uiState.approvalState !== "verifying" &&
-                !approvalMutation.isPending;
+                !approvalMutation.isPending &&
+                !denialMutation.isPending;
 
               return (
                 <article
                   key={request.id}
-                  className="grid gap-4 border border-[#b6c2b7] bg-[#fbfff8] p-4 shadow-sm lg:grid-cols-[1fr_280px]"
+                  className={`${surface} grid gap-5 p-5 transition hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)] xl:grid-cols-[minmax(0,1fr)_320px]`}
                 >
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#54635b]">
+                        <p className="font-mono-ui text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--muted)]">
                           {request.id}
                         </p>
-                        <h2 className="mt-1 text-xl font-semibold">
+                        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[color:var(--accent)]">
                           {balance?.employeeName ?? request.employeeId}
                         </h2>
-                        <p className="mt-1 text-sm text-[#54635b]">
+                        <p className="mt-2 text-sm text-[color:var(--muted)]">
                           {balance?.locationName ?? "Unknown location"} -{" "}
-                          {formatLeaveType(request.leaveType)} -{" "}
-                          {request.requestedAmount} hours
+                          {formatLeaveType(request.leaveType)} - {request.requestedAmount} hours
                         </p>
                       </div>
                       <span
-                        className={`border px-2 py-1 text-xs font-semibold ${stateClass[uiState.approvalState]}`}
+                        className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${stateClass[uiState.approvalState]}`}
                       >
                         {uiState.approvalState}
                       </span>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="border border-[#d0d9cf] bg-[#f5f8f1] p-3">
-                        <p className="text-xs text-[#54635b]">Available</p>
-                        <p className="mt-1 text-2xl font-semibold">
+                      <div className="rounded-2xl border border-[color:var(--border)] bg-[#f6fbfd] p-4">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                          Available
+                        </p>
+                        <p className="mt-2 text-3xl font-semibold text-[color:var(--accent)]">
                           {balance?.available ?? "--"}
                         </p>
                       </div>
-                      <div className="border border-[#d0d9cf] bg-[#f5f8f1] p-3">
-                        <p className="text-xs text-[#54635b]">Pending</p>
-                        <p className="mt-1 text-2xl font-semibold">
+                      <div className="rounded-2xl border border-[color:var(--border)] bg-[#f6fbfd] p-4">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                          Pending
+                        </p>
+                        <p className="mt-2 text-3xl font-semibold text-[color:var(--accent)]">
                           {balance?.pending ?? "--"}
                         </p>
                       </div>
-                      <div className="border border-[#d0d9cf] bg-[#f5f8f1] p-3">
-                        <p className="text-xs text-[#54635b]">Balance version</p>
-                        <p className="mt-1 text-2xl font-semibold">
+                      <div className="rounded-2xl border border-[color:var(--border)] bg-[#f6fbfd] p-4">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                          Balance version
+                        </p>
+                        <p className="mt-2 text-3xl font-semibold text-[color:var(--accent)]">
                           {balance ? `v${balance.version}` : "--"}
                         </p>
                       </div>
                     </div>
 
-                    <p className="border-l-4 border-[#748271] bg-[#f5f8f1] px-3 py-2 text-sm">
+                    <p className="rounded-2xl border-l-4 border-[color:var(--accent-warm)] bg-[#f6fbfd] px-4 py-3 text-sm leading-6 text-[color:var(--foreground)]">
                       {uiState.message}
                     </p>
-                    <p className="text-sm text-[#54635b]">
+                    <p className="text-sm text-[color:var(--muted)]">
                       {request.startDate} to {request.endDate} - {request.reason}
                     </p>
                   </div>
 
-                  <div className="flex flex-col justify-between gap-4 border border-[#d0d9cf] bg-[#e1eadf] p-3">
-                    <label className="grid gap-1 text-sm font-medium">
+                  <div className={`${surfaceSoft} flex flex-col justify-between gap-4 p-4`}>
+                    <label className="grid gap-2 text-sm font-medium text-[color:var(--foreground)]">
                       HCM approval behavior
                       <select
                         value={behavior}
@@ -398,7 +487,7 @@ export function ManagerView({
                             [request.id]: event.target.value as ApprovalBehavior,
                           }))
                         }
-                        className="border border-[#9aa89b] bg-[#fbfff8] px-3 py-2"
+                        className={fieldClass}
                       >
                         <option value="normal">normal</option>
                         <option value="balance-changed">balance-changed</option>
@@ -406,16 +495,26 @@ export function ManagerView({
                       </select>
                     </label>
 
-                    <div className="grid gap-2">
+                    <div className="grid gap-3">
                       <button
                         type="button"
                         disabled={!canApprove}
                         onClick={() => void handleApprove(request)}
-                        className="border border-[#18211f] bg-[#18211f] px-4 py-3 text-sm font-semibold text-[#fbfff8] transition hover:bg-[#2f3935] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-center rounded-xl bg-[linear-gradient(135deg,#0b4a5f,#1e8a9a)] px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_28px_-18px_rgba(11,74,95,0.9)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {uiState.approvalState === "verifying"
                           ? "Verifying"
                           : "Verify and approve"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canApprove}
+                        onClick={() => void handleDeny(request)}
+                        className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900 transition hover:-translate-y-0.5 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {uiState.approvalState === "verifying"
+                          ? "Reviewing"
+                          : "Deny request"}
                       </button>
                       <button
                         type="button"
@@ -434,7 +533,7 @@ export function ManagerView({
                             },
                           }));
                         }}
-                        className="border border-[#748271] bg-[#fbfff8] px-4 py-3 text-sm font-semibold transition hover:border-[#18211f]"
+                        className="inline-flex items-center justify-center rounded-xl border border-[color:var(--border-strong)] bg-white px-4 py-3 text-sm font-semibold text-[color:var(--foreground)] transition hover:-translate-y-0.5 hover:border-[color:var(--accent)] hover:bg-[#f7fbfd]"
                       >
                         Refresh and recover
                       </button>
@@ -447,23 +546,45 @@ export function ManagerView({
         </section>
 
         {approvedRequests.length > 0 ? (
-          <section className="border border-[#b6c2b7] bg-[#fbfff8]">
-            <div className="border-b border-[#b6c2b7] px-4 py-3">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#54635b]">
+          <section className={`${surface} overflow-hidden`}>
+            <div className="border-b border-[color:var(--border)] px-5 py-4">
+              <h2 className="font-mono-ui text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--muted)]">
                 Approval confirmations
               </h2>
             </div>
-            <div className="divide-y divide-[#d0d9cf]">
+            <div className="divide-y divide-[color:var(--border)]/70">
               {approvedRequests.map((request) => (
                 <div
                   key={request.id}
-                  className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_120px]"
+                  className="grid gap-2 px-5 py-4 text-sm sm:grid-cols-[minmax(0,1fr)_120px]"
                 >
-                  <span>
-                    {request.id} - {formatLeaveType(request.leaveType)} -{" "}
-                    {request.requestedAmount} hours
+                  <span className="text-[color:var(--foreground)]">
+                    {request.id} - {formatLeaveType(request.leaveType)} - {request.requestedAmount} hours
                   </span>
-                  <strong>confirmed</strong>
+                  <strong className="text-[color:var(--accent)]">confirmed</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {rejectedRequests.length > 0 ? (
+          <section className={`${surface} overflow-hidden`}>
+            <div className="border-b border-[color:var(--border)] px-5 py-4">
+              <h2 className="font-mono-ui text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--muted)]">
+                Denial confirmations
+              </h2>
+            </div>
+            <div className="divide-y divide-[color:var(--border)]/70">
+              {rejectedRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="grid gap-2 px-5 py-4 text-sm sm:grid-cols-[minmax(0,1fr)_120px]"
+                >
+                  <span className="text-[color:var(--foreground)]">
+                    {request.id} - {formatLeaveType(request.leaveType)} - {request.requestedAmount} hours
+                  </span>
+                  <strong className="text-rose-800">denied</strong>
                 </div>
               ))}
             </div>

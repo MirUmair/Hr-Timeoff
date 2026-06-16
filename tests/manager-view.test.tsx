@@ -13,6 +13,7 @@ vi.mock("@/lib/hcm/hcmClient", () => ({
   HcmClientError: class HcmClientError extends Error {},
   approveTimeOffRequest: vi.fn(),
   createTimeOffRequest: vi.fn(),
+  denyTimeOffRequest: vi.fn(),
   fetchBalance: vi.fn(),
   fetchBalances: vi.fn(),
   fetchTimeOffRequests: vi.fn(),
@@ -38,6 +39,7 @@ describe("ManagerView", () => {
     expect(screen.getByText("Verify latest HCM balance before every approval.")).toBeInTheDocument();
     expect(screen.getByText(/School break coverage/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Verify and approve" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Deny request" })).toBeEnabled();
     expect(screen.getByRole("combobox", { name: /HCM approval behavior/i })).toBeInTheDocument();
   });
 });

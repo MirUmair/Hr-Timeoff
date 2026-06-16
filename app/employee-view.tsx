@@ -221,6 +221,15 @@ export function EmployeeView({
   initialBalances,
   initialRequests,
 }: EmployeeViewProps) {
+  const shell = "mx-auto w-full max-w-[1480px] px-4 py-7 sm:px-6 lg:px-8";
+  const surface =
+    "rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-[var(--shadow)] ring-1 ring-white/70 backdrop-blur";
+  const surfaceSoft =
+    "rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--shadow-soft)] ring-1 ring-white/80";
+  const fieldClass =
+    "w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[color:var(--foreground)] outline-none transition placeholder:text-[color:var(--muted)] focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[rgba(30,138,154,0.14)]";
+  const labelClass = "grid gap-2 text-sm font-medium text-[color:var(--foreground)]";
+
   const queryClient = useQueryClient();
   const [activeEmployeeId, setActiveEmployeeId] = useState<EmployeeId>(
     employeeIds[0] ?? "emp-1001",
@@ -357,38 +366,69 @@ export function EmployeeView({
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f1e8] text-[#18211f]">
-      <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="grid gap-4 border-b border-[#c9c0ad] pb-5 lg:grid-cols-[1fr_auto]">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5a645f]">
-              ExampleHR Employee View
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-normal text-[#18211f]">
-              Time off control desk
-            </h1>
-            <Link
-              href="/manager"
-              className="mt-3 inline-flex border border-[#758071] bg-[#fffaf0] px-3 py-2 text-sm font-semibold text-[#18211f] transition hover:border-[#18211f]"
-            >
-              Open manager queue
-            </Link>
-          </div>
-          <div className="flex items-end">
-            <div className="border border-[#c9c0ad] bg-[#fffaf0] px-4 py-3 text-sm shadow-sm">
-              <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#5a645f]">
+    <main className="relative min-h-screen overflow-hidden text-[color:var(--foreground)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.9),_transparent_32%),radial-gradient(circle_at_88%_6%,_rgba(30,138,154,0.14),_transparent_24%)]" />
+      <section className={shell + " relative z-10 space-y-6"}>
+        <header className={`${surface} relative overflow-hidden p-5 md:p-7`}>
+          <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,var(--accent),#1e8a9a,var(--accent-warm))]" />
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="font-mono-ui text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--accent-warm)]">
+                ExampleHR employee workspace
+              </p>
+              <h1 className="font-display mt-3 text-4xl leading-[0.98] font-semibold tracking-tight text-[color:var(--foreground)] sm:text-5xl">
+                Time off control desk
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-[color:var(--muted)] sm:text-base">
+                Review balances, submit requests, and keep every change in sync with the authoritative HCM record.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href="/manager"
+                  className="inline-flex items-center justify-center rounded-xl bg-[color:var(--accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_26px_-18px_rgba(11,74,95,0.85)] transition hover:-translate-y-0.5 hover:bg-[#083849]"
+                >
+                  Open manager queue
+                </Link>
+                <div className="inline-flex items-center rounded-xl border border-[color:var(--border)] bg-white/70 px-4 py-2.5 text-sm text-[color:var(--muted)]">
+                  Live verification and rollback safeguards
+                </div>
+              </div>
+            </div>
+            <div className="min-w-[280px] rounded-3xl bg-[color:var(--accent)] p-5 text-white shadow-[0_24px_48px_-32px_rgba(11,74,95,0.75)]">
+              <p className="font-mono-ui text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100">
                 HCM status
-              </span>
-              <span className="mt-1 block font-medium">{notice}</span>
+              </p>
+              <p className="mt-3 text-sm leading-6 text-white/90">
+                {notice}
+              </p>
+              <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
+                  <span className="block text-xs uppercase tracking-[0.18em] text-cyan-100">
+                    Mode
+                  </span>
+                  <strong className="mt-1 block">Optimistic</strong>
+                </div>
+                <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
+                  <span className="block text-xs uppercase tracking-[0.18em] text-cyan-100">
+                    Source
+                  </span>
+                  <strong className="mt-1 block">Authoritative HCM</strong>
+                </div>
+              </div>
             </div>
           </div>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[240px_1fr_360px]">
-          <aside className="border border-[#c9c0ad] bg-[#ede7da] p-3">
-            <h2 className="px-2 pb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#5a645f]">
-              Employee / location
-            </h2>
+        <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_360px]">
+          <aside className={`${surface} p-3 lg:sticky lg:top-6 lg:self-start`}>
+            <div className="flex items-center justify-between px-1 pb-3">
+              <h2 className="font-mono-ui text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--muted)]">
+                Employee / location
+              </h2>
+              <span className="rounded-lg border border-[color:var(--border)] bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--accent-warm)]">
+                {employees.length} people
+              </span>
+            </div>
             <div className="space-y-2">
               {employees.map((employee) => (
                 <button
@@ -401,16 +441,16 @@ export function EmployeeView({
                       employeeId: employee.employeeId,
                     }));
                   }}
-                  className={`w-full border px-3 py-3 text-left transition ${
+                  className={`w-full rounded-2xl border px-4 py-4 text-left transition duration-200 hover:-translate-y-0.5 ${
                     activeEmployeeId === employee.employeeId
-                      ? "border-[#18211f] bg-[#18211f] text-[#fffaf0]"
-                      : "border-[#c9c0ad] bg-[#fffaf0] text-[#18211f] hover:border-[#758071]"
+                      ? "border-[color:var(--accent)] bg-[linear-gradient(135deg,#0b4a5f,#16798a)] text-white shadow-[0_18px_36px_-26px_rgba(11,74,95,0.9)]"
+                      : "border-[color:var(--border)] bg-white text-[color:var(--foreground)] hover:border-[color:var(--border-strong)] hover:bg-[#f7fbfd]"
                   }`}
                 >
                   <span className="block text-sm font-semibold">
                     {employee.employeeName}
                   </span>
-                  <span className="mt-1 block text-xs opacity-80">
+                  <span className="mt-1 block text-xs text-current/70">
                     {employee.locationName} - {employee.employeeId}
                   </span>
                 </button>
@@ -418,8 +458,8 @@ export function EmployeeView({
             </div>
           </aside>
 
-          <section className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
+          <section className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-3">
               {visibleBalances.map((balance) => {
                 const key = balanceKey(balance.employeeId, balance.leaveType);
                 const status = getCellStatus(
@@ -432,38 +472,48 @@ export function EmployeeView({
                 return (
                   <article
                     key={key}
-                    className="border border-[#c9c0ad] bg-[#fffaf0] p-4 shadow-sm"
+                    className={`${surface} p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#5a645f]">
+                        <h2 className="font-mono-ui text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--muted)]">
                           {formatLeaveType(balance.leaveType)}
                         </h2>
-                        <p className="mt-3 text-4xl font-semibold tracking-normal">
+                        <p className="mt-4 text-4xl font-semibold tracking-tight text-[color:var(--accent)]">
                           {balance.available}
-                          <span className="ml-1 text-sm font-medium text-[#5a645f]">
+                          <span className="ml-2 align-middle text-sm font-medium text-[color:var(--muted)]">
                             {balance.unit}
                           </span>
                         </p>
                       </div>
                       <span
-                        className={`border px-2 py-1 text-[11px] font-semibold ${statusClass[status]}`}
+                        className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusClass[status]}`}
                       >
                         {statusCopy[status]}
                       </span>
                     </div>
-                    <dl className="mt-5 grid grid-cols-3 gap-2 text-sm">
-                      <div>
-                        <dt className="text-xs text-[#5a645f]">Pending</dt>
-                        <dd className="font-semibold">{balance.pending}</dd>
+                    <dl className="mt-6 grid grid-cols-3 gap-2 text-sm">
+                      <div className="rounded-2xl border border-[color:var(--border)] bg-[#f6fbfd] p-3">
+                        <dt className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                          Pending
+                        </dt>
+                        <dd className="mt-1 text-base font-semibold">
+                          {balance.pending}
+                        </dd>
                       </div>
-                      <div>
-                        <dt className="text-xs text-[#5a645f]">Used</dt>
-                        <dd className="font-semibold">{balance.used}</dd>
+                      <div className="rounded-2xl border border-[color:var(--border)] bg-[#f6fbfd] p-3">
+                        <dt className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                          Used
+                        </dt>
+                        <dd className="mt-1 text-base font-semibold">
+                          {balance.used}
+                        </dd>
                       </div>
-                      <div>
-                        <dt className="text-xs text-[#5a645f]">Version</dt>
-                        <dd className="font-semibold">v{balance.version}</dd>
+                      <div className="rounded-2xl border border-[color:var(--border)] bg-[#f6fbfd] p-3">
+                        <dt className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                          Version
+                        </dt>
+                        <dd className="mt-1 text-base font-semibold">v{balance.version}</dd>
                       </div>
                     </dl>
                   </article>
@@ -471,36 +521,47 @@ export function EmployeeView({
               })}
             </div>
 
-            <section className="border border-[#c9c0ad] bg-[#fffaf0]">
-              <div className="flex items-center justify-between border-b border-[#c9c0ad] px-4 py-3">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#5a645f]">
-                  Requests
-                </h2>
-                <span className="text-sm font-medium">
-                  {selectedEmployee?.employeeName ?? activeEmployeeId}
+            <section className={`${surface} overflow-hidden`}>
+              <div className="flex items-center justify-between border-b border-[color:var(--border)] px-5 py-4">
+                <div>
+                  <h2 className="font-mono-ui text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--muted)]">
+                    Requests
+                  </h2>
+                  <p className="mt-1 text-sm text-[color:var(--muted)]">
+                    Live request history for {selectedEmployee?.employeeName ?? activeEmployeeId}
+                  </p>
+                </div>
+                <span className="rounded-lg border border-[color:var(--border)] bg-white px-3 py-1 text-sm font-medium text-[color:var(--foreground)]">
+                  {activeRequests.length} open
                 </span>
               </div>
-              <div className="divide-y divide-[#ded6c6]">
+              <div className="divide-y divide-[color:var(--border)]/70">
                 {activeRequests.length === 0 ? (
-                  <p className="px-4 py-8 text-sm text-[#5a645f]">
+                  <p className="px-5 py-10 text-sm text-[color:var(--muted)]">
                     No requests for this employee yet.
                   </p>
                 ) : (
                   activeRequests.map((request) => (
                     <div
                       key={request.id}
-                      className="grid gap-3 px-4 py-3 text-sm sm:grid-cols-[1fr_120px_100px]"
+                      className="grid gap-4 px-5 py-4 text-sm md:grid-cols-[minmax(0,1fr)_140px_80px] md:items-center"
                     >
                       <div>
-                        <p className="font-semibold">
-                          {formatLeaveType(request.leaveType)} - {request.requestedAmount} hours
+                        <p className="font-semibold text-[color:var(--accent)]">
+                          {formatLeaveType(request.leaveType)} request
+                          <span className="mx-2 text-[color:var(--muted)]">-</span>
+                          {request.requestedAmount} hours
                         </p>
-                        <p className="mt-1 text-[#5a645f]">
+                        <p className="mt-1 text-[color:var(--muted)]">
                           {request.startDate} to {request.endDate} - {request.reason}
                         </p>
                       </div>
-                      <p className="font-medium">{request.status}</p>
-                      <p className="text-[#5a645f]">v{request.version}</p>
+                      <p className="inline-flex w-fit rounded-lg border border-[color:var(--border)] bg-[#f6fbfd] px-3 py-1 text-sm font-medium capitalize">
+                        {request.status}
+                      </p>
+                      <p className="font-mono-ui text-sm text-[color:var(--muted)] md:text-right">
+                        v{request.version}
+                      </p>
                     </div>
                   ))
                 )}
@@ -510,13 +571,24 @@ export function EmployeeView({
 
           <form
             onSubmit={handleSubmit}
-            className="border border-[#18211f] bg-[#dbe6dd] p-4 shadow-sm"
+            className={`${surfaceSoft} self-start p-5 lg:col-span-2 xl:sticky xl:top-6 xl:col-span-1`}
           >
-            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#34403b]">
-              New request
-            </h2>
-            <div className="mt-4 grid gap-3">
-              <label className="grid gap-1 text-sm font-medium">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-mono-ui text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--muted)]">
+                  New request
+                </h2>
+                <p className="mt-2 text-sm text-[color:var(--muted)]">
+                  Submit against the latest HCM balance with optimistic feedback.
+                </p>
+              </div>
+              <span className="rounded-lg border border-[color:var(--border)] bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--accent-warm)]">
+                Draft
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4">
+              <label className={labelClass}>
                 Employee
                 <select
                   value={form.employeeId}
@@ -526,7 +598,7 @@ export function EmployeeView({
                       employeeId: event.target.value,
                     }))
                   }
-                  className="border border-[#9ba99f] bg-[#fffaf0] px-3 py-2"
+                  className={fieldClass}
                 >
                   {employees.map((employee) => (
                     <option key={employee.employeeId} value={employee.employeeId}>
@@ -536,7 +608,7 @@ export function EmployeeView({
                 </select>
               </label>
 
-              <label className="grid gap-1 text-sm font-medium">
+              <label className={labelClass}>
                 Leave type
                 <select
                   value={form.leaveType}
@@ -546,7 +618,7 @@ export function EmployeeView({
                       leaveType: event.target.value as LeaveType,
                     }))
                   }
-                  className="border border-[#9ba99f] bg-[#fffaf0] px-3 py-2"
+                  className={fieldClass}
                 >
                   {leaveTypes.map((leaveType) => (
                     <option key={leaveType} value={leaveType}>
@@ -556,8 +628,8 @@ export function EmployeeView({
                 </select>
               </label>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-sm font-medium">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={labelClass}>
                   Start
                   <input
                     type="date"
@@ -568,10 +640,10 @@ export function EmployeeView({
                         startDate: event.target.value,
                       }))
                     }
-                    className="border border-[#9ba99f] bg-[#fffaf0] px-3 py-2"
+                    className={fieldClass}
                   />
                 </label>
-                <label className="grid gap-1 text-sm font-medium">
+                <label className={labelClass}>
                   End
                   <input
                     type="date"
@@ -582,12 +654,12 @@ export function EmployeeView({
                         endDate: event.target.value,
                       }))
                     }
-                    className="border border-[#9ba99f] bg-[#fffaf0] px-3 py-2"
+                    className={fieldClass}
                   />
                 </label>
               </div>
 
-              <label className="grid gap-1 text-sm font-medium">
+              <label className={labelClass}>
                 Hours
                 <input
                   type="number"
@@ -600,11 +672,11 @@ export function EmployeeView({
                       requestedAmount: event.target.value,
                     }))
                   }
-                  className="border border-[#9ba99f] bg-[#fffaf0] px-3 py-2"
+                  className={fieldClass}
                 />
               </label>
 
-              <label className="grid gap-1 text-sm font-medium">
+              <label className={labelClass}>
                 Reason
                 <input
                   value={form.reason}
@@ -614,11 +686,11 @@ export function EmployeeView({
                       reason: event.target.value,
                     }))
                   }
-                  className="border border-[#9ba99f] bg-[#fffaf0] px-3 py-2"
+                  className={fieldClass}
                 />
               </label>
 
-              <label className="grid gap-1 text-sm font-medium">
+              <label className={labelClass}>
                 HCM behavior
                 <select
                   value={form.scenario}
@@ -628,7 +700,7 @@ export function EmployeeView({
                       scenario: event.target.value as TimeOffMutationScenario,
                     }))
                   }
-                  className="border border-[#9ba99f] bg-[#fffaf0] px-3 py-2"
+                  className={fieldClass}
                 >
                   <option value="normal">normal</option>
                   <option value="insufficient-balance">insufficient-balance</option>
@@ -640,7 +712,7 @@ export function EmployeeView({
               <button
                 type="submit"
                 disabled={mutation.isPending}
-                className="mt-2 border border-[#18211f] bg-[#18211f] px-4 py-3 text-sm font-semibold text-[#fffaf0] transition hover:bg-[#2f3935] disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-1 inline-flex items-center justify-center rounded-xl bg-[linear-gradient(135deg,#0b4a5f,#1e8a9a)] px-5 py-3.5 text-sm font-semibold text-white shadow-[0_16px_28px_-18px_rgba(11,74,95,0.9)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_32px_-20px_rgba(11,74,95,0.95)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {mutation.isPending ? "Submitting" : "Submit request"}
               </button>

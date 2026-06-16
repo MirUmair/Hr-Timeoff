@@ -49,6 +49,14 @@ export type ApproveTimeOffRequestInput = {
   scenario?: Extract<TimeOffMutationScenario, "normal" | "conflict">;
 };
 
+export type DenyTimeOffRequestInput = {
+  requestId: TimeOffRequestId;
+  managerId: EmployeeId;
+  expectedRequestVersion?: number;
+  reason?: string;
+  scenario?: Extract<TimeOffMutationScenario, "normal" | "conflict">;
+};
+
 export type TimeOffRequestsResponse = {
   requests: TimeOffRequest[];
   generatedAt: string;

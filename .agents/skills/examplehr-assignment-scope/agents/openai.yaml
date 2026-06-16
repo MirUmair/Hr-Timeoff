@@ -1,0 +1,4 @@
+interface:
+  display_name: "ExampleHR Assignment Scope"
+  short_description: "Check implementation against the take-home brief"
+  default_prompt: "Use $examplehr-assignment-scope to compare this change against the ExampleHR assignment requirements."

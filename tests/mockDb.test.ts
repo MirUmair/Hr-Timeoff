@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   approveTimeOffRequest,
   createTimeOffRequest,
+  denyTimeOffRequest,
   getAuthoritativeBalance,
   listBalances,
   listTimeOffRequests,
@@ -100,5 +101,50 @@ describe("mockDb", () => {
       expect(approval.value.request.status).toBe("approved");
       expect(approval.value.request.version).toBe(2);
     }
+  });
+
+  it("denies a pending request and releases the pending balance", () => {
+    const created = createTimeOffRequest({
+      employeeId: "emp-1001",
+      leaveType: "sick",
+      startDate: "2026-07-11",
+      endDate: "2026-07-11",
+      requestedAmount: 4,
+      reason: "Medical appointment",
+      expectedBalanceVersion: 1,
+    });
+
+    expect(created.ok).toBe(true);
+    if (!created.ok) {
+      throw new Error("Expected request creation to succeed.");
+    }
+
+    const beforeDenial = listBalances({ employeeIds: ["emp-1001"], leaveTypes: ["sick"] })
+      .balances[0];
+    expect(beforeDenial).toMatchObject({
+      available: 44,
+      pending: 4,
+    });
+
+    const denial = denyTimeOffRequest({
+      requestId: created.value.request.id,
+      managerId: "mgr-9001",
+      expectedRequestVersion: created.value.request.version,
+      reason: "Coverage gap.",
+    });
+
+    expect(denial.ok).toBe(true);
+    if (denial.ok) {
+      expect(denial.value.request.status).toBe("rejected");
+      expect(denial.value.request.version).toBe(2);
+      expect(denial.value.request.reason).toContain("Denied: Coverage gap.");
+    }
+
+    const afterDenial = listBalances({ employeeIds: ["emp-1001"], leaveTypes: ["sick"] })
+      .balances[0];
+    expect(afterDenial).toMatchObject({
+      available: 48,
+      pending: 0,
+    });
   });
 });

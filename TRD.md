@@ -1,539 +1,467 @@
-# Technical Requirements Document: Time Off Workflow
+# Technical Requirements Document: ExampleHR Time-Off Frontend
 
-## 1. Purpose
+## 1. Assignment Summary
 
-This document defines the technical design for the time-off experience in `examplehr-timeoff`.
-It describes the target architecture, data flow, optimistic update behavior, cache strategy, mock HCM endpoints, Storybook coverage, and the testing approach.
+ExampleHR needs a time-off frontend where employees can see trustworthy balances and submit time-off requests while the Human Capital Management system remains the source of truth. The UI must feel instant, but it cannot lie to the user: HCM may reject a request, refresh a balance in the background, return a conflict, or even appear to accept a mutation that later proves wrong.
 
-The current repository is a minimal Next.js App Router shell. The implementation described here is the intended next step and should be built without introducing unnecessary routing or state complexity.
+The take-home asks for:
+
+- An employee view for per-location balances and time-off submission.
+- A manager view for reviewing, approving, and denying pending requests with balance context visible at decision time.
+- A data layer that talks to mock HCM endpoints, supports optimistic UI, reconciles with HCM, and degrades gracefully when HCM is slow, wrong, or silent.
+- Mock HCM route handlers or MSW handlers that simulate real-time reads/writes, batch balance reads, anniversary bonus refreshes, silent wrong mutations, insufficient-balance rejection, and conflict responses.
+- Storybook stories for meaningful UI states.
+- Tests and proof of coverage.
+- A TRD that explains challenges, solution design, alternatives considered, cache strategy, reconciliation strategy, and how the component tree maps to the problem.
 
 ## 2. Goals
 
-- Let an employee view current time-off balance, requests, and request status.
-- Let an employee create, edit, and cancel time-off requests with immediate UI feedback.
-- Keep the UI responsive by using optimistic updates for write operations.
-- Reconcile optimistic state with canonical server state after each mutation.
-- Avoid stale data through deliberate cache invalidation and revalidation.
-- Provide isolated mock HCM endpoints so development and Storybook can run without a real backend.
-- Maintain strong test coverage at the component, integration, and flow level.
+- Show employees current balances across employee/location/leave-type cells.
+- Let employees submit time-off requests with immediate optimistic feedback.
+- Keep HCM authoritative by reconciling optimistic state after mutations.
+- Let managers approve or deny pending requests only with current balance context.
+- Model stale reads, conflicts, insufficient balance, anniversary bonuses, and silent wrong mutations.
+- Provide Storybook proof for critical states, not only happy paths.
+- Provide tests that future contributors cannot silently break.
 
-## 3. Non-Goals
+## 3. Non-Goals And Scope Boundaries
 
-- Building a full HR platform.
-- Implementing real authentication or authorization beyond local mock/session assumptions.
-- Modeling every possible leave policy edge case on day one.
-- Coupling the UI directly to a vendor-specific HCM API shape.
+- No real authentication or authorization.
+- No real HCM vendor integration.
+- No durable database persistence.
+- No full HR platform or complete policy engine.
+- Employee edit/cancel flows are future product extensions, not required by the take-home brief.
+- Browser E2E can be added as a later CI layer, but the take-home explicitly allows Storybook interaction, component, and integration tests against mock HCM.
 
-## 4. Current App Shape
+## 4. User Needs
 
-The repository currently contains a single App Router entrypoint:
+### Employee
 
-- `app/layout.tsx`
+The employee wants fast feedback after submitting a request, but should never see a misleading final state. A request may appear immediately as pending, but approval is not shown unless HCM confirms the lifecycle state.
+
+### Manager
+
+The manager needs the balance shown at decision time, not a stale value from initial page load. Approval and denial therefore use stronger server confirmation and authoritative balance refreshes.
+
+## 5. Interesting Challenges
+
+### HCM Owns The Numbers
+
+ExampleHR does not own employment balances. The frontend must treat local state and optimistic UI as provisional until HCM confirms.
+
+### Balances Can Change Elsewhere
+
+Anniversary bonuses or annual refreshes can update HCM while the user has the app open. The UI must refresh without surprising the user or hiding the fact that the original visible balance was stale.
+
+### Per-Cell Real-Time Reads
+
+The prompt describes an authoritative read/write API for a single balance cell. The implementation uses per-cell reads for verification after writes and before manager approval.
+
+### Batch Reads Are Useful But Expensive
+
+The batch corpus endpoint is useful for initial hydration, employee switching, and broad refreshes. It is not the right tool for every manager decision because it is heavier and still may not be fresh enough for approval-time confidence.
+
+### HCM Can Be Wrong Or Silent
+
+The assignment explicitly says a success response can still be wrong. The app therefore includes a silent-wrong-mutation scenario and performs authoritative reads after writes so late contradictions are recoverable.
+
+## 6. Proposed Solution
+
+The implementation uses a small full-stack Next.js App Router app:
+
+- Server-rendered route pages fetch initial mock HCM data.
+- Client views use TanStack Query for request and balance server state.
+- Next.js route handlers simulate HCM.
+- Domain behavior lives in `lib/hcm/mockDb.ts`.
+- Typed client functions live in `lib/hcm/hcmClient.ts`.
+- Shared query keys live in `lib/query/queryKeys.ts`.
+- Storybook stories document important workflow states.
+- Vitest and Testing Library cover domain, route, client, reconciliation, and component behavior.
+
+## 7. Architecture And Component Tree
+
+### Route Tree
+
 - `app/page.tsx`
-- `app/globals.css`
+  - Fetches initial employee balances and requests.
+  - Renders `EmployeeView`.
+- `app/employee-view.tsx`
+  - Client component for balances, request history, request form, optimistic submission, and reconciliation messages.
+- `app/manager/page.tsx`
+  - Fetches initial manager queue data.
+  - Renders `ManagerView`.
+- `app/manager/manager-view.tsx`
+  - Client component for approval queue, balance verification, approve, deny, stale/conflict recovery, and decision confirmations.
+- `app/api/hcm/**/route.ts`
+  - Mock HCM transport layer.
+- `app/loading.tsx`, `app/error.tsx`, `app/manager/loading.tsx`, `app/manager/error.tsx`
+  - Route-level loading and recovery states.
 
-That means the first feature work should remain centered on the App Router model:
+### Data Layer
 
-- Keep route UI in `app/`.
-- Colocate feature utilities in private folders or feature folders under `app/` as the app grows.
-- Use server-rendered pages as the source of truth and client components for interactive mutation flows.
+- `lib/hcm/mockDb.ts`
+  - In-memory HCM state, seed data, balance math, request lifecycle, conflict simulation, and scenario handling.
+- `lib/hcm/hcmClient.ts`
+  - Browser-facing typed fetch wrappers.
+- `lib/types/balance.ts`
+  - Balance cell and batch balance contracts.
+- `lib/types/request.ts`
+  - Request lifecycle and mutation input contracts.
+- `lib/reconciliation/reconcileBalance.ts`
+  - Reconciliation helper for optimistic and authoritative balance comparison.
 
-## 5. Proposed Architecture
+### Storybook Layer
 
-### 5.1 High-Level Structure
+- `app/employee-view.stories.tsx`
+  - Employee seeded and empty request states.
+- `app/manager/manager-view.stories.tsx`
+  - Manager seeded, empty, and denied decision states.
+- `stories/time-off-workflow.stories.tsx`
+  - Visual proof board for workflow states such as optimistic submission, rollback, stale balance, denial, loading, and backend failure.
 
-The app should follow a layered design:
+## 8. Data Model
 
-- Presentation layer: route pages, layouts, and reusable UI components.
-- Interaction layer: client components for forms, filters, dialogs, and optimistic state.
-- Data layer: typed API client or server-side data adapters that talk to the HCM contract.
-- Cache layer: React Query for client-side query state plus Next.js cache revalidation for server-rendered data.
-- Mock layer: local HCM endpoints that simulate the real backend contract.
+### Balance Cell
 
-### 5.2 Recommended Folder Boundaries
+Balances are modeled per employee, location, and leave type:
 
-The implementation should be organized by feature, not by technology alone.
+- `employeeId`
+- `employeeName`
+- `locationId`
+- `locationName`
+- `leaveType`
+- `unit`
+- `available`
+- `pending`
+- `used`
+- `annualAllowance`
+- `version`
+- `lastCalculatedAt`
+- `anniversaryBonusAppliedAt`
 
-Suggested shape:
+### Time-Off Request
 
-- `app/`
-- `app/(timeoff)/`
-- `app/(timeoff)/page.tsx`
-- `app/(timeoff)/time-off-request/[id]/page.tsx`
-- `app/api/hcm/...`
-- `components/`
-- `components/time-off/`
-- `lib/`
-- `lib/hcm/`
-- `lib/query/`
-- `lib/validators/`
-- `stories/`
-
-The exact folder names can change, but the separation should remain:
-
-- routes own layout and navigation composition,
-- feature components own UI behavior,
-- data adapters own API translation,
-- mock endpoints own fake persistence,
-- stories own isolated UI examples.
-
-### 5.3 Server and Client Responsibilities
-
-Use server components for:
-
-- initial data loading,
-- page-level authorization checks,
-- canonical reads that should be cacheable,
-- server mutations when a mutation should end with revalidation.
-
-Use client components for:
-
-- request forms,
-- date pickers,
-- filters,
-- dialog flows,
-- optimistic mutations,
-- interactive error recovery.
-
-This split keeps the server authoritative while keeping the UI fast and tactile.
-
-## 6. Data Model
-
-The TRD assumes the app will work with a small canonical model:
-
-- `TimeOffBalance`
-- `TimeOffRequest`
-- `Employee`
-- `Policy`
-
-Minimum `TimeOffRequest` fields:
+Requests include:
 
 - `id`
 - `employeeId`
-- `type`
+- `leaveType`
 - `startDate`
 - `endDate`
+- `requestedAmount`
 - `status`
 - `reason`
 - `createdAt`
 - `updatedAt`
+- `version`
+- `clientMutationId`
 
-Statuses should include at least:
+Supported statuses:
 
-- `draft`
 - `pending`
 - `approved`
 - `rejected`
-- `cancelled`
 
-The UI should never assume a request is immutable until the server confirms it.
+Future edit/cancel work can add `draft` and `cancelled` states if those workflows become product requirements.
 
-## 7. Data Fetching Strategy
+## 9. Mock HCM Contract
 
-### 7.1 Source of Truth
+Implemented endpoints:
 
-The server is the source of truth.
+- `POST /api/hcm/balances`
+  - Batch balance corpus read.
+- `GET /api/hcm/balance`
+  - Authoritative per-cell balance read.
+  - Supports `trigger=anniversary-bonus`.
+- `GET /api/hcm/time-off-requests`
+  - Request list read.
+- `POST /api/hcm/time-off-requests`
+  - Employee request creation.
+- `POST /api/hcm/manager/approve`
+  - Manager approval decision.
+- `POST /api/hcm/manager/deny`
+  - Manager denial decision.
 
-Canonical read paths should come from the HCM adapter or from cached server helpers that call the HCM adapter.
-Client state may temporarily diverge during optimistic actions, but it must eventually reconcile to server data.
+Supported scenarios:
 
-### 7.2 Query Ownership
+- `normal`
+- `conflict`
+- `insufficient-balance`
+- `silent-wrong-mutation`
+- `anniversary-bonus` trigger on authoritative balance read
 
-Use React Query on the client for:
+## 10. Balance And Request Rules
 
-- request lists,
-- request detail views,
-- balance summaries,
-- lookup data needed by forms,
-- mutation status and rollback handling.
+### Create Request
 
-Use Next.js server rendering for:
+When an employee creates a request:
 
-- the first paint of the dashboard,
-- route transitions that benefit from server composition,
-- cacheable data that can be streamed or revalidated.
+1. The UI snapshots the current React Query cache.
+2. It creates a temporary optimistic request.
+3. It decreases the visible available balance and increases visible pending balance.
+4. It sends the mutation to HCM with the expected balance version.
+5. On success, it replaces the optimistic request with the HCM request.
+6. It performs an authoritative per-cell read.
+7. If HCM contradicts the optimistic balance, it surfaces a recoverable conflict.
+8. On failure, it restores the previous cache and preserves user input.
 
-This gives us a hybrid model:
+### Approve Request
 
-- server-rendered shell for fast initial delivery,
-- client query cache for responsive interactions,
-- server revalidation for durable freshness.
+When a manager approves:
 
-## 8. Optimistic Update Strategy
+1. The UI reads the latest per-cell HCM balance.
+2. If the visible balance changed, approval is blocked and the manager reviews the refreshed context.
+3. If the balance is stable, the approval mutation uses the expected request version.
+4. HCM marks the request `approved`.
+5. HCM moves hours from `pending` to `used`.
+6. The UI refreshes the authoritative balance and request list.
 
-### 8.1 Principles
+### Deny Request
 
-Optimistic updates should make the interface feel immediate while remaining reversible.
+When a manager denies:
 
-Every mutation should follow this shape:
+1. The denial mutation uses the expected request version.
+2. HCM marks the request `rejected`.
+3. HCM releases hours from `pending` back to `available`.
+4. The UI refreshes authoritative balance and request state.
 
-1. Snapshot the current client cache.
-2. Apply a minimal optimistic change.
-3. Mark the affected row or form as pending.
-4. Send the mutation request.
-5. Replace the optimistic record with server-confirmed data on success.
-6. Roll back the snapshot on failure.
+## 11. Optimistic Versus Pessimistic Decision
 
-### 8.2 What Gets Optimistically Updated
+### Why Optimistic For Employee Submission
 
-Optimistic updates should be used for:
+Employee submission benefits from immediate feedback. The UI can safely show a provisional pending request because it is not claiming approval. This improves perceived speed while remaining honest.
 
-- creating a request,
-- editing a request,
-- cancelling a request,
-- changing a request draft before submission,
-- toggling local filters if they are purely client-side.
+### Why Not Optimistic For Manager Approval
 
-Optimistic updates should not be used for:
+Approval affects a more sensitive lifecycle decision. A manager should not see an approval confirmed until HCM verifies the balance and request version. Manager approval and denial therefore use stronger confirmation and refetch behavior.
 
-- policy calculations that depend on server-only rules,
-- approval decisions,
-- any data that could affect permissions or payroll without server confirmation.
+### Why Not Fully Pessimistic
 
-### 8.3 Temporary IDs
+Fully pessimistic submission would be simpler, but it would fail the assignment's requirement that the workflow feel instant and responsive. It also would not demonstrate the core tension between local responsiveness and HCM correctness.
 
-For create flows, the client should generate a temporary ID and insert a pending row immediately.
+## 12. Alternatives Considered
 
-That row should include:
+### Pessimistic Writes Only
 
-- a local-only `optimisticId`,
-- a visual pending state,
-- any user-entered fields,
-- a clear pending timestamp or badge when useful.
+This avoids rollback complexity, but makes the employee experience feel slow and does not prove the optimistic/reconciliation challenge requested by the assignment.
 
-When the server responds:
+### Trusting Write Responses Without Re-Read
 
-- replace the temporary ID with the real ID,
-- merge the confirmed fields,
-- remove the optimistic marker.
+This is risky because HCM may silently accept the wrong mutation. The implementation instead performs an authoritative balance read after writes and treats mismatches as recoverable contradictions.
 
-### 8.4 Mutation Queueing
+### Batch Read For Every Decision
 
-If multiple edits happen quickly on the same item, the client should serialize them or reject stale submissions.
+The batch endpoint is useful for initial hydration, but too expensive and broad for approval-time confidence. The implementation uses batch reads for initial context and per-cell reads for critical verification.
 
-Recommended approach:
+### Local Component State Only
 
-- disable the submit action while a request is in flight for the same entity,
-- allow list browsing during submission,
-- keep the latest local edit visible in the form,
-- prevent duplicate create submissions by idempotency key or request fingerprint.
+Local state would work for a toy form, but it does not model shared freshness, invalidation, rollback, or recovery across employee and manager views. TanStack Query is a better fit for server-owned state.
 
-## 9. Reconciliation Strategy
+### One Generic Request Mutation Endpoint
 
-### 9.1 Success Reconciliation
+Approval and denial have different consistency rules from employee creation. Separate manager endpoints keep request-version checks and balance movement explicit.
 
-On successful mutation:
+## 13. Cache Strategy
 
-- update the affected query caches with the canonical server response,
-- remove any optimistic placeholder,
-- sync derived views such as balance summaries or counts,
-- clear validation messages associated with the submitted draft,
-- refetch if the server returned only a partial payload.
+### Query Keys
 
-### 9.2 Failure Reconciliation
+The app centralizes query keys in `lib/query/queryKeys.ts`:
+
+- HCM balance corpus.
+- Per-cell balance reads.
+- Request lists.
+- Individual request records for future detail screens.
+
+### Client Cache Ownership
+
+React Query owns:
+
+- Balance query state.
+- Request query state.
+- Mutation pending/error states.
+- Manual cache replacement after authoritative reads.
+
+### Cache Update Rules
+
+- Create request: optimistic cache update, then authoritative replacement or rollback.
+- Approval: verify per-cell balance, write decision, then replace request and balance caches.
+- Denial: write decision, release pending balance in HCM, then replace request and balance caches.
+- Conflict: show recoverable warning and require refresh/retry.
+
+## 14. Reconciliation Strategy
+
+### Successful Reconciliation
+
+On success:
+
+- Replace temporary request IDs with HCM request IDs.
+- Replace local balance cells with authoritative balance cells.
+- Remove temporary optimistic status.
+- Show completion or confirmation status.
+
+### Failed Reconciliation
 
 On failure:
 
-- restore the previous snapshot,
-- show a domain-specific error message,
-- preserve user-entered form state where possible,
-- highlight the failed entity or field,
-- allow retry without forcing the user to rebuild the request.
+- Restore the previous balance and request cache snapshot.
+- Preserve form input.
+- Show a domain-specific message.
+- Mark the affected balance cell as `rejected` or `conflicted`.
 
-### 9.3 Conflict Reconciliation
+### Background Refresh With In-Flight Action
 
-If the server rejects a mutation because the underlying record changed:
+If HCM changes while a mutation or approval is in flight:
 
-- treat it as a version conflict, not a generic failure,
-- refetch the canonical request,
-- show a warning that the record changed elsewhere,
-- keep a diff-friendly summary of what was overwritten if possible.
+- Employee create uses `expectedBalanceVersion` so stale creates are rejected as conflicts.
+- Manager approval reads the latest balance immediately before approval.
+- If approval-time balance differs from the visible balance, the UI blocks the decision and asks the manager to review the refreshed context.
+- Anniversary bonus is modeled with an explicit trigger so tests and stories can prove the refresh behavior.
 
-This is important for HR flows because approvals, cancellations, and policy changes can happen from multiple surfaces.
+## 15. Error Handling
 
-### 9.4 Reconciliation Policy by Mutation Type
+The app handles:
 
-- `create`: replace optimistic placeholder with returned request.
-- `edit`: merge server-confirmed fields into the existing row.
-- `cancel`: flip status to cancelled locally, then confirm or roll back.
-- `approve/reject`: usually require a stronger server confirmation and a mandatory refetch.
+- Validation errors.
+- Insufficient balance.
+- Version conflicts.
+- Silent wrong mutation contradictions.
+- Route-level unexpected errors.
+- Loading states during route fetches.
 
-## 10. Cache Invalidation Strategy
+User-facing principles:
 
-### 10.1 Client Cache
+- Preserve user input where possible.
+- Avoid claiming approval before HCM confirms.
+- Make recoverable conflicts explicit.
+- Give the user a retry or refresh path.
 
-React Query should hold the client-side query state.
+## 16. Storybook Plan And Coverage
 
-Recommended invalidation behavior:
+Storybook is used as proof that the UI states were considered beyond the happy path.
 
-- invalidate the request list after create/edit/cancel,
-- invalidate the specific request detail after any direct change to that request,
-- invalidate the balance summary after any status change that can affect accrual or availability,
-- avoid blind full-cache clears unless the user switches employee context or tenant.
+Covered stories include:
 
-### 10.2 Server Cache
+- Employee seeded workspace.
+- Employee empty request queue.
+- Manager seeded queue.
+- Manager empty queue.
+- Manager denied decision.
+- Workflow proof board for optimistic submission, validation error, rollback, stale balance, silent wrong mutation, manager denial, loading skeleton, and offline/backend failure.
 
-For server-rendered reads, use Next.js cache tagging or path revalidation around the canonical data layer.
+Storybook is runnable with:
 
-Tag groups should align with business objects, not UI widgets:
+```bash
+npm run storybook
+```
 
-- `time-off-requests`
-- `time-off-request:{id}`
-- `time-off-balance:{employeeId}`
-- `employee:{employeeId}`
+The static Storybook build is verified with:
 
-Recommended invalidation rules:
+```bash
+npm run build-storybook
+```
 
-- `updateTag` for immediate read-your-own-writes behavior after mutations in server actions,
-- `revalidateTag` when stale-while-revalidate is acceptable,
-- `revalidatePath` only when route-level re-rendering is simpler than tag-based invalidation.
+## 17. Test Strategy
 
-### 10.3 Invalidation Matrix
+The assignment says Storybook interaction tests, component tests, and integration tests against mock HCM are all fair game. This implementation uses a layered suite:
 
-- Create request: invalidate request list, current balance, and the new detail record.
-- Edit request: invalidate request detail, request list, and any dependent balance data.
-- Cancel request: invalidate request detail, request list, and balance data.
-- Approve/reject: invalidate the full employee time-off view and any aggregate summaries.
+### Domain Tests
 
-### 10.4 Invalidation Timing
+`tests/mockDb.test.ts` covers:
 
-Preferred order:
+- Seeded balance grid.
+- Insufficient balance rejection.
+- Anniversary bonus behavior.
+- Approval balance movement.
+- Denial balance release.
 
-1. Perform the mutation.
-2. Persist the canonical result.
-3. Invalidate the smallest useful cache scope.
-4. Update client query caches.
-5. Re-render or refetch only where needed.
+### Route Integration Tests
 
-This keeps the UI fast while minimizing thrash.
+`tests/routes.test.ts` covers:
 
-## 11. Mock HCM Endpoints
+- Invalid HCM input handling.
+- Batch balance reads.
+- Request creation.
+- Approval route behavior.
+- Denial route behavior.
 
-### 11.1 Purpose
+### Client Tests
 
-Mock HCM endpoints let us build and test the UI before the real integration exists.
+`tests/hcmClient.test.ts` covers:
 
-They should emulate:
+- Endpoint wiring.
+- HCM error parsing.
+- Approval and denial client calls.
 
-- realistic latency,
-- validation failures,
-- stale reads,
-- version conflicts,
-- policy denials,
-- pagination or filtering behavior if needed.
+### Reconciliation Tests
 
-### 11.2 Contract Design
+`tests/reconcileBalance.test.ts` covers:
 
-The mock API should mirror a stable HCM contract rather than the UI directly.
+- In-sync authoritative balance.
+- Stale optimistic balance.
+- Authoritative overwrite detection.
 
-Recommended endpoint groups:
+### Component Tests
 
-- `POST /api/hcm/balances`
-- `GET /api/hcm/balance`
-- `GET /api/hcm/time-off-requests`
-- `POST /api/hcm/time-off-requests`
-- `POST /api/hcm/manager/approve`
+`tests/employee-view.test.tsx` and `tests/manager-view.test.tsx` cover:
 
-If the UI later needs manager workflows, add separate endpoints for approvals rather than folding them into employee endpoints.
+- Employee balance and request rendering.
+- Manager queue rendering.
+- Approval and denial controls.
 
-### 11.3 Mock Behavior Requirements
+### Browser E2E Position
 
-The mock service should support:
+Browser E2E with Playwright or Cypress would be a good next CI layer for the full browser journey. It is not included in the current implementation because the assignment did not require a specific E2E framework and explicitly allowed Storybook, component, and integration tests as fair-game proof.
 
-- deterministic seed data,
-- resettable state for tests,
-- server-side validation errors,
-- conflict simulation via version numbers or ETags,
-- request delay injection,
-- optional failure injection for testing retries.
-- batch balance reads,
-- per-cell authoritative balance reads,
-- insufficient balance rejection,
-- silent success with the wrong internal mutation,
-- anniversary bonus triggering.
+## 18. Verification Commands
 
-### 11.4 Mock Persistence
+Primary commands:
 
-For local development, persistence can be in memory or file-backed depending on how durable the workflow needs to be.
+```bash
+npm run lint
+npm run test:coverage
+npm run build
+npm run build-storybook
+```
 
-Recommended default:
+Expected proof:
 
-- in-memory during tests and Storybook,
-- file-backed or local-only persistence during manual dev if we want state to survive refreshes.
+- Lint passes.
+- Tests pass.
+- Coverage passes configured thresholds.
+- Next.js production build passes.
+- Storybook production build passes.
 
-The important rule is that the contract must stay identical across both modes.
+## 19. Risks And Mitigations
 
-## 12. Storybook Coverage
+### Risk: Optimistic UI Drifts From HCM
 
-Storybook should be used to document and validate the critical UI states independently from the route shell.
+Mitigation: Use expected versions, rollback snapshots, and authoritative per-cell reads after mutations.
 
-### 12.1 What to Cover
+### Risk: Manager Approves Stale Balance
 
-Create stories for:
+Mitigation: Manager approval performs a per-cell balance read before approval and blocks if the visible balance changed.
 
-- request list empty state,
-- request list populated state,
-- request row pending state,
-- request row error state,
-- request detail panel,
-- request creation form,
-- validation error state,
-- optimistic submission state,
-- cancelled request state,
-- balance summary card,
-- loading skeletons,
-- offline or backend failure states.
+### Risk: Mock HCM Diverges From Real HCM
 
-### 12.2 Story Composition Strategy
+Mitigation: Keep route handlers behind typed client functions and centralize domain rules in `mockDb`.
 
-Stories should primarily target presentational and interaction components, not the full route.
+### Risk: Storybook Becomes Too Broad
 
-Prefer:
+Mitigation: Keep full route logic in the app, and use Storybook for meaningful states and composite workflow proof.
 
-- component-level stories for cards, tables, forms, and dialogs,
-- composite stories for a full dashboard panel,
-- mocked query/provider wrappers for data-dependent states.
+### Risk: Tests Only Cover Happy Paths
 
-Avoid:
+Mitigation: Include insufficient balance, conflict, denial, anniversary bonus, route validation, and reconciliation tests.
 
-- duplicating the entire app route in Storybook,
-- coupling stories to live network calls,
-- depending on global mutable state that makes stories order-sensitive.
+## 20. Acceptance Criteria
 
-### 12.3 Storybook Data Sources
-
-Stories should consume:
-
-- static fixture data,
-- mock query client state,
-- mock handlers that simulate success and failure,
-- seeded states for optimistic and conflict scenarios.
-
-This makes Storybook useful as both a design reference and a regression tool.
-
-## 13. Testing Strategy
-
-### 13.1 Test Layers
-
-The test pyramid should be:
-
-- unit tests for pure helpers and validators,
-- component tests for rendering and interaction,
-- integration tests for query + mutation flows,
-- end-to-end tests for the full user journey.
-
-### 13.2 Unit Tests
-
-Unit test:
-
-- date normalization,
-- request status transitions,
-- balance calculations,
-- validation helpers,
-- optimistic merge and rollback helpers,
-- endpoint serializers and adapters.
-
-These tests should be fast and deterministic.
-
-### 13.3 Component Tests
-
-Component tests should verify:
-
-- forms render the correct labels and fields,
-- validation errors appear in the right places,
-- pending UI is visible during submission,
-- optimistic rows render immediately,
-- error states preserve user input,
-- disabled states prevent duplicate submits.
-
-### 13.4 Integration Tests
-
-Integration tests should exercise the data layer with mocked HCM endpoints:
-
-- fetch request list, create request, and confirm cache updates,
-- edit request and verify invalidation of dependent views,
-- cancel request and verify reconciliation after response,
-- simulate conflict and verify refetch and warning UI,
-- simulate validation error and verify rollback.
-
-### 13.5 End-to-End Tests
-
-E2E tests should cover the highest-value flows in a browser:
-
-- create a request from the dashboard,
-- edit a request and see the canonical result,
-- cancel a request,
-- recover from a validation error,
-- handle a network failure gracefully.
-
-Because this is an App Router app and some screens may be async server-rendered, E2E tests should be the primary confidence layer for route-level behavior.
-
-### 13.6 Storybook as Visual Test Support
-
-Storybook is not a replacement for tests, but it should reduce the chance of UI regressions by giving us reproducible states for:
-
-- pending,
-- empty,
-- loaded,
-- error,
-- conflict,
-- skeleton,
-- optimistic.
-
-## 14. Error Handling
-
-Errors should be explicit and recoverable.
-
-Expected error classes:
-
-- validation errors,
-- auth/session errors,
-- conflict errors,
-- network failures,
-- unexpected server errors.
-
-UI behavior:
-
-- validation errors should stay near the field,
-- conflicts should explain that the data changed elsewhere,
-- network failures should offer retry,
-- unexpected errors should fall back to a safe boundary with a support-friendly message.
-
-## 15. Observability
-
-At minimum, log and/or surface:
-
-- mutation start and failure,
-- conflict occurrences,
-- invalidation events,
-- latency of mock and real HCM calls,
-- error class and endpoint name.
-
-This makes it much easier to debug optimistic UI bugs and cache staleness.
-
-## 16. Risks
-
-- Optimistic UI can drift from server truth if reconciliation is incomplete.
-- Over-invalidating caches can make the app feel slow and noisy.
-- Under-invalidating caches can leave users seeing stale leave balances.
-- Mock endpoints that diverge from the real HCM contract will create integration churn later.
-- Storybook can become noisy if we model too many states without a fixture strategy.
-
-## 17. Implementation Order
-
-1. Define the HCM data contract and request lifecycle.
-2. Build the mock endpoints and seed data.
-3. Implement the server read path and route shell.
-4. Add query caching and optimistic mutation helpers.
-5. Wire cache invalidation and reconciliation.
-6. Add Storybook stories for each key state.
-7. Add unit, component, integration, and E2E coverage.
-
-## 18. Acceptance Criteria
-
-- Users can create, edit, and cancel time-off requests with immediate optimistic feedback.
-- Failed mutations roll back cleanly and preserve user input.
-- The UI shows canonical server data after reconciliation.
-- Request lists and balances refresh correctly after mutations.
-- Mock HCM endpoints support local development and Storybook without external dependencies.
-- The critical flows have test coverage across unit, component, integration, and browser layers.
+- Employee can view per-location balances.
+- Employee can submit a time-off request with optimistic pending feedback.
+- Failed employee mutations roll back and preserve form input.
+- HCM remains the source of truth after reconciliation.
+- Manager can approve pending requests with fresh balance verification.
+- Manager can deny pending requests and release pending balance.
+- Mock HCM supports batch reads, per-cell reads, create, approve, deny, anniversary bonus, insufficient balance, conflict, and silent wrong mutation.
+- Storybook documents meaningful UI states.
+- Test suite covers domain, route, client, reconciliation, and component behavior.
+- Project builds successfully with Next.js and Storybook.

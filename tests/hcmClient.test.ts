@@ -4,6 +4,7 @@ import {
   HcmClientError,
   approveTimeOffRequest,
   createTimeOffRequest,
+  denyTimeOffRequest,
   fetchBalance,
   fetchBalances,
   fetchTimeOffRequests,
@@ -90,9 +91,16 @@ describe("hcmClient", () => {
       managerId: "mgr-9001",
       expectedRequestVersion: 1,
     });
+    await denyTimeOffRequest({
+      requestId: "tor-0002",
+      managerId: "mgr-9001",
+      expectedRequestVersion: 1,
+      reason: "Coverage gap.",
+    });
 
     expect(fetchSpy.mock.calls[0]?.[0]).toContain("/api/hcm/balance?");
     expect(fetchSpy.mock.calls[1]?.[0]).toContain("/api/hcm/time-off-requests?employeeId=emp-1001");
     expect(fetchSpy.mock.calls[2]?.[0]).toBe("/api/hcm/manager/approve");
+    expect(fetchSpy.mock.calls[3]?.[0]).toBe("/api/hcm/manager/deny");
   });
 });

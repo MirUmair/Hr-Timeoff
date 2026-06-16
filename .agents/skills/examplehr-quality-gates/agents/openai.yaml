@@ -1,0 +1,4 @@
+interface:
+  display_name: "ExampleHR Quality Gates"
+  short_description: "Run tests, coverage, build, and Storybook checks"
+  default_prompt: "Use $examplehr-quality-gates to validate changes before submitting this ExampleHR app."

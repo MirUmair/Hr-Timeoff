@@ -36,7 +36,7 @@ describe("EmployeeView", () => {
 
     expect(screen.getByText("Time off control desk")).toBeInTheDocument();
     expect(screen.getAllByText("Maya Chen").length).toBeGreaterThan(0);
-    expect(screen.getByText("New York - emp-1001")).toBeInTheDocument();
+    expect(screen.getByText(/New York.*emp-1001/)).toBeInTheDocument();
     expect(screen.getByText(/School break coverage/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Submit request" })).toBeEnabled();
   });

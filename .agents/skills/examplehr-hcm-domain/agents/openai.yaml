@@ -1,0 +1,4 @@
+interface:
+  display_name: "ExampleHR HCM Domain"
+  short_description: "Handle balances, requests, and reconciliation"
+  default_prompt: "Use $examplehr-hcm-domain to implement or review HCM balance and time-off request behavior."

@@ -10,6 +10,7 @@ import type {
 import type {
   ApproveTimeOffRequestInput,
   CreateTimeOffRequestInput,
+  DenyTimeOffRequestInput,
   HcmErrorResponse,
   TimeOffRequest,
   TimeOffRequestsResponse,
@@ -417,6 +418,61 @@ export function approveTimeOffRequest(
 
   return success(200, {
     request: cloneRequest(approvedRequest),
+    generatedAt: nowIso(),
+  });
+}
+
+export function denyTimeOffRequest(
+  input: DenyTimeOffRequestInput,
+): MockDbResult<TimeOffRequestWriteResponse> {
+  const state = getState();
+  const request = state.requests.get(input.requestId);
+
+  if (!request) {
+    return error(404, "NOT_FOUND", "Time-off request was not found.", "requestId");
+  }
+
+  if (
+    input.scenario === "conflict" ||
+    (input.expectedRequestVersion !== undefined &&
+      input.expectedRequestVersion !== request.version)
+  ) {
+    return error(
+      409,
+      "CONFLICT",
+      "Request version changed before denial.",
+      "expectedRequestVersion",
+      request.version,
+    );
+  }
+
+  if (request.status !== "pending") {
+    return error(409, "CONFLICT", "Only pending requests can be denied.", "status", request.version);
+  }
+
+  const balance = readBalance(state, request.employeeId, request.leaveType);
+
+  if (!balance) {
+    return error(404, "NOT_FOUND", "Balance cell was not found.");
+  }
+
+  const timestamp = nowIso();
+  const deniedRequest: TimeOffRequest = {
+    ...request,
+    status: "rejected",
+    reason: input.reason ? `${request.reason} | Denied: ${input.reason}` : request.reason,
+    updatedAt: timestamp,
+    version: request.version + 1,
+  };
+
+  state.requests.set(request.id, deniedRequest);
+  writeBalance(
+    state,
+    bumpBalance(balance, request.requestedAmount, -request.requestedAmount, 0),
+  );
+
+  return success(200, {
+    request: cloneRequest(deniedRequest),
     generatedAt: nowIso(),
   });
 }

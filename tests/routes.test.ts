@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { GET as getAuthoritativeBalanceRoute } from "@/app/api/hcm/balance/route";
 import { GET as getBatchBalancesRoute, POST as postBatchBalancesRoute } from "@/app/api/hcm/balances/route";
 import { POST as postManagerApproveRoute } from "@/app/api/hcm/manager/approve/route";
+import { POST as postManagerDenyRoute } from "@/app/api/hcm/manager/deny/route";
 import { GET as getRequestsRoute, POST as postRequestsRoute } from "@/app/api/hcm/time-off-requests/route";
 import { resetMockHcmDb } from "@/lib/hcm/mockDb";
 
@@ -93,6 +94,54 @@ describe("HCM routes", () => {
     };
 
     expect(requestsPayload.requests.some((request) => request.status === "approved")).toBe(true);
+  });
+
+  it("creates and denies a request through the route handlers", async () => {
+    const createdResponse = await postRequestsRoute(
+      new Request("http://localhost/api/hcm/time-off-requests", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId: "emp-1001",
+          leaveType: "personal",
+          startDate: "2026-07-18",
+          endDate: "2026-07-18",
+          requestedAmount: 4,
+          reason: "Appointment",
+          expectedBalanceVersion: 1,
+        }),
+      }),
+    );
+
+    expect(createdResponse.status).toBe(201);
+    const createdPayload = (await createdResponse.json()) as {
+      request: { id: string; status: string; version: number };
+    };
+
+    const denialResponse = await postManagerDenyRoute(
+      new Request("http://localhost/api/hcm/manager/deny", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          requestId: createdPayload.request.id,
+          managerId: "mgr-9001",
+          expectedRequestVersion: createdPayload.request.version,
+          reason: "Coverage gap.",
+        }),
+      }),
+    );
+
+    expect(denialResponse.status).toBe(200);
+    const denialPayload = (await denialResponse.json()) as {
+      request: { status: string; version: number; reason: string };
+    };
+    expect(denialPayload.request.status).toBe("rejected");
+    expect(denialPayload.request.version).toBeGreaterThan(createdPayload.request.version);
+    expect(denialPayload.request.reason).toContain("Denied: Coverage gap.");
   });
 
   it("returns the batch balance corpus", async () => {

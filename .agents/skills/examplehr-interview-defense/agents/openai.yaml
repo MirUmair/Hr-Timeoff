@@ -1,0 +1,4 @@
+interface:
+  display_name: "ExampleHR Interview Defense"
+  short_description: "Explain architecture and tradeoffs clearly"
+  default_prompt: "Use $examplehr-interview-defense to prepare clear interview answers about this app."
