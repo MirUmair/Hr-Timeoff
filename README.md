@@ -36,12 +36,21 @@ ExampleHR Time Off is a Next.js App Router take-home implementation for a time-o
 
 ## Coverage Proof
 
+- Latest local verification: `npm run test:coverage`
+- Result: 10 test files passed, 39 tests passed.
+- Coverage summary: 76.59% statements, 65.46% branches, 78.18% functions, 76.95% lines.
+- Configured coverage threshold: 50% for statements, branches, functions, and lines.
+- Generated reports: `coverage/index.html` and `coverage/lcov.info`.
 - `tests/mockDb.test.ts`: HCM business rules, balance changes, anniversary bonus, approval, and denial.
 - `tests/routes.test.ts`: API contract for batch reads, per-cell reads, request creation, approval, and denial.
 - `tests/hcmClient.test.ts`: typed client endpoint wiring and HCM error parsing.
 - `tests/reconcileBalance.test.ts`: optimistic-to-authoritative balance reconciliation.
 - `tests/employee-view.test.tsx`: employee balance and request UI rendering.
+- `tests/employee-view.interaction.test.tsx`: user-event request submission, optimistic feedback, rollback, conflict, and reconciliation flows.
 - `tests/manager-view.test.tsx`: manager queue, approve, and deny controls.
+- `tests/manager-view.interaction.test.tsx`: user-event approval verification, stale-balance blocking, approve success, deny success, and conflict recovery flows.
+- `tests/demoSession.test.ts`: dummy credential catalog, role sessions, and employee access checks.
+- `tests/login-panel.test.tsx`: login account selection and demo credential UX.
 
 ## Development
 

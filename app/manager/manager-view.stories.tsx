@@ -10,6 +10,7 @@ import {
   resetMockHcmDb,
 } from "@/lib/hcm/mockDb";
 import type { TimeOffRequestsResponse } from "@/lib/types/request";
+import { buildStoryHandlers } from "@/stories/storybook-hcm";
 
 const employeeIds = ["emp-1001", "emp-2002"];
 
@@ -79,15 +80,30 @@ function buildDeniedStoryProps() {
 
 export const SeededQueue: Story = {
   args: buildStoryProps(),
+  parameters: {
+    msw: {
+      handlers: buildStoryHandlers(),
+    },
+  },
   render: (args) => <ManagerView {...args} />,
 };
 
 export const EmptyQueue: Story = {
   args: buildStoryProps(true),
+  parameters: {
+    msw: {
+      handlers: buildStoryHandlers(),
+    },
+  },
   render: (args) => <ManagerView {...args} />,
 };
 
 export const DeniedDecisionLogged: Story = {
   args: buildDeniedStoryProps(),
+  parameters: {
+    msw: {
+      handlers: buildStoryHandlers(),
+    },
+  },
   render: (args) => <ManagerView {...args} />,
 };

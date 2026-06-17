@@ -8,6 +8,7 @@ import {
   fetchBalance,
   fetchBalances,
   fetchTimeOffRequests,
+  resetDemoHcmData,
 } from "@/lib/hcm/hcmClient";
 
 describe("hcmClient", () => {
@@ -97,10 +98,12 @@ describe("hcmClient", () => {
       expectedRequestVersion: 1,
       reason: "Coverage gap.",
     });
+    await resetDemoHcmData();
 
     expect(fetchSpy.mock.calls[0]?.[0]).toContain("/api/hcm/balance?");
     expect(fetchSpy.mock.calls[1]?.[0]).toContain("/api/hcm/time-off-requests?employeeId=emp-1001");
     expect(fetchSpy.mock.calls[2]?.[0]).toBe("/api/hcm/manager/approve");
     expect(fetchSpy.mock.calls[3]?.[0]).toBe("/api/hcm/manager/deny");
+    expect(fetchSpy.mock.calls[4]?.[0]).toBe("/api/hcm/reset");
   });
 });

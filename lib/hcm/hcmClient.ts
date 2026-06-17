@@ -10,6 +10,7 @@ import type {
   CreateTimeOffRequestInput,
   DenyTimeOffRequestInput,
   HcmErrorResponse,
+  HcmResetResponse,
   TimeOffRequestsResponse,
   TimeOffRequestWriteResponse,
 } from "@/lib/types/request";
@@ -135,5 +136,11 @@ export function denyTimeOffRequest(
   return requestJson<TimeOffRequestWriteResponse>("/api/hcm/manager/deny", {
     method: "POST",
     json: input,
+  });
+}
+
+export function resetDemoHcmData(): Promise<HcmResetResponse> {
+  return requestJson<HcmResetResponse>("/api/hcm/reset", {
+    method: "POST",
   });
 }

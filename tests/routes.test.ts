@@ -4,6 +4,7 @@ import { GET as getAuthoritativeBalanceRoute } from "@/app/api/hcm/balance/route
 import { GET as getBatchBalancesRoute, POST as postBatchBalancesRoute } from "@/app/api/hcm/balances/route";
 import { POST as postManagerApproveRoute } from "@/app/api/hcm/manager/approve/route";
 import { POST as postManagerDenyRoute } from "@/app/api/hcm/manager/deny/route";
+import { POST as postResetRoute } from "@/app/api/hcm/reset/route";
 import { GET as getRequestsRoute, POST as postRequestsRoute } from "@/app/api/hcm/time-off-requests/route";
 import {
   AUTH_COOKIE_NAME,
@@ -178,6 +179,54 @@ describe("HCM routes", () => {
     const payload = (await response.json()) as { balances: Array<{ employeeId: string }> };
     expect(payload.balances).toHaveLength(6);
     expect(payload.balances.map((balance) => balance.employeeId)).toContain("emp-1001");
+  });
+
+  it("resets mock HCM data back to the seeded demo state", async () => {
+    const createdResponse = await postRequestsRoute(
+      new Request("http://localhost/api/hcm/time-off-requests", {
+        method: "POST",
+        headers: authHeaders("employee", {
+          "content-type": "application/json",
+        }),
+        body: JSON.stringify({
+          employeeId: "emp-1001",
+          leaveType: "sick",
+          startDate: "2026-07-21",
+          endDate: "2026-07-21",
+          requestedAmount: 4,
+          reason: "Reset rehearsal",
+          expectedBalanceVersion: 1,
+        }),
+      }),
+    );
+
+    expect(createdResponse.status).toBe(201);
+
+    const resetResponse = postResetRoute(
+      new Request("http://localhost/api/hcm/reset", {
+        method: "POST",
+        headers: authHeaders("employee"),
+      }),
+    );
+
+    expect(resetResponse.status).toBe(200);
+    const payload = (await resetResponse.json()) as {
+      balances: Array<{ employeeId: string; leaveType: string; pending: number }>;
+      requests: Array<{ id: string; reason: string }>;
+    };
+
+    expect(payload.requests).toHaveLength(1);
+    expect(payload.requests[0]).toMatchObject({
+      id: "tor-0001",
+      reason: "School break coverage",
+    });
+    expect(
+      payload.balances.find(
+        (balance) => balance.employeeId === "emp-1001" && balance.leaveType === "vacation",
+      ),
+    ).toMatchObject({
+      pending: 8,
+    });
   });
 
   it("rejects unauthenticated manager decisions", async () => {

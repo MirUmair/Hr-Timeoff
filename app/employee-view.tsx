@@ -5,7 +5,6 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import Link from "next/link";
 import { startTransition, useState } from "react";
 
 import {
@@ -14,8 +13,10 @@ import {
   fetchBalances,
   fetchTimeOffRequests,
   HcmClientError,
+  resetDemoHcmData,
 } from "@/lib/hcm/hcmClient";
 import { queryKeys } from "@/lib/query/queryKeys";
+import { reconcileBalance } from "@/lib/reconciliation/reconcileBalance";
 import type {
   BalanceCell,
   BalanceCellKey,
@@ -181,6 +182,14 @@ function getDateBadge(date: string): { month: string; day: string; year: string 
   };
 }
 
+function getRequestTime(request: TimeOffRequest): number {
+  return Date.parse(request.updatedAt || request.createdAt) || 0;
+}
+
+function sortLatestRequests(first: TimeOffRequest, second: TimeOffRequest): number {
+  return getRequestTime(second) - getRequestTime(first);
+}
+
 function getEmployees(balances: BalanceCell[]): EmployeeSummary[] {
   const employees = new Map<EmployeeId, EmployeeSummary>();
 
@@ -240,17 +249,6 @@ function appendOrReplaceRequest(
     ...response,
     requests: [request, ...withoutExisting],
   };
-}
-
-function hasReconciliationConflict(
-  optimistic: BalanceCell,
-  authoritative: BalanceCell,
-): boolean {
-  return (
-    optimistic.available !== authoritative.available ||
-    optimistic.pending !== authoritative.pending ||
-    optimistic.used !== authoritative.used
-  );
 }
 
 function buildTempRequest(form: RequestForm, amount: number): TimeOffRequest {
@@ -328,6 +326,7 @@ export function EmployeeView({
   >({});
   const [notice, setNotice] = useState("Balances loaded from HCM.");
   const [isRequestModalOpen, setRequestModalOpen] = useState(false);
+  const [isAllRequestsModalOpen, setAllRequestsModalOpen] = useState(false);
   const [form, setForm] = useState<RequestForm>({
     employeeId: employeeIds[0] ?? "emp-1001",
     leaveType: "vacation",
@@ -351,6 +350,9 @@ export function EmployeeView({
   const mutation = useMutation({
     mutationFn: createTimeOffRequest,
   });
+  const resetMutation = useMutation({
+    mutationFn: resetDemoHcmData,
+  });
 
   const balances = balancesQuery.data.balances;
   const requests = requestsQuery.data.requests;
@@ -364,6 +366,8 @@ export function EmployeeView({
   const activeRequests = requests.filter(
     (request) => request.employeeId === activeEmployeeId,
   );
+  const latestRequests = [...activeRequests].sort(sortLatestRequests);
+  const latestRequest = latestRequests[0];
   const selectedEmployeeIndex = Math.max(
     0,
     employees.findIndex((employee) => employee.employeeId === activeEmployeeId),
@@ -403,6 +407,59 @@ export function EmployeeView({
       </div>
     </section>
   );
+
+  function renderRequestCard(request: TimeOffRequest): React.ReactNode {
+    const badge = getDateBadge(request.startDate);
+
+    return (
+      <div
+        key={request.id}
+        className="grid gap-4 rounded-2xl border border-[color:var(--border)] bg-white p-4 text-sm sm:grid-cols-[76px_minmax(0,1fr)_auto] sm:items-center"
+      >
+        <div className="rounded-xl bg-[#f4f7f9] px-3 py-2 text-center">
+          <p className="text-xs font-bold text-[color:var(--muted)]">{badge.month}</p>
+          <p className="text-3xl font-extrabold leading-none text-[#071427]">{badge.day}</p>
+          <p className="mt-1 text-xs font-semibold text-[color:var(--muted)]">{badge.year}</p>
+        </div>
+        <div>
+          <p className="font-extrabold">
+            {formatLeaveType(request.leaveType)} request - {request.requestedAmount} hours
+          </p>
+          <p className="mt-2 text-[color:var(--muted)]">
+            {request.startDate} to {request.endDate}
+          </p>
+          <p className="mt-1 text-[color:var(--muted)]">{request.reason}</p>
+        </div>
+        <div className="flex items-center gap-4 sm:flex-col sm:items-end">
+          <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-bold capitalize text-amber-700">
+            {request.status}
+          </span>
+          <span className="text-sm font-bold text-[color:var(--muted)]">v{request.version}</span>
+        </div>
+      </div>
+    );
+  }
+
+  async function handleResetDemoData() {
+    try {
+      const response = await resetMutation.mutateAsync();
+
+      queryClient.setQueryData<BatchBalancesResponse>(queryKeys.balances(employeeIds), {
+        balances: response.balances,
+        generatedAt: response.generatedAt,
+      });
+      queryClient.setQueryData<TimeOffRequestsResponse>(queryKeys.timeOffRequests(), {
+        requests: response.requests,
+        generatedAt: response.generatedAt,
+      });
+      setCellStatus({});
+      setAllRequestsModalOpen(false);
+      setRequestModalOpen(false);
+      setNotice("Demo HCM data reset to its starting position.");
+    } catch (error) {
+      setNotice(`Reset failed. ${getErrorMessage(error)}`);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -465,13 +522,17 @@ export function EmployeeView({
       });
 
       const authoritative = await fetchBalance(form.employeeId, form.leaveType);
+      const reconciliation = reconcileBalance(
+        optimisticBalance,
+        authoritative.balance,
+      );
 
       queryClient.setQueryData<BatchBalancesResponse>(
         queryKeys.balances(employeeIds),
-        replaceBalance(previousBalances, authoritative.balance),
+        replaceBalance(previousBalances, reconciliation.balance),
       );
 
-      if (hasReconciliationConflict(optimisticBalance, authoritative.balance)) {
+      if (reconciliation.status !== "in-sync") {
         setCellStatus((current) => ({ ...current, [key]: "conflicted" }));
         setNotice(
           "Conflict detected. HCM accepted the request, but the authoritative balance did not match the optimistic mutation.",
@@ -667,46 +728,41 @@ export function EmployeeView({
                 </span>
               </div>
               <div className="space-y-3 px-6 pb-5">
-                {activeRequests.length === 0 ? (
+                {!latestRequest ? (
                   <p className="rounded-2xl border border-dashed border-[color:var(--border)] px-4 py-8 text-sm text-[color:var(--muted)]">
                     No requests for this employee yet.
                   </p>
                 ) : (
-                  activeRequests.map((request) => {
-                    const badge = getDateBadge(request.startDate);
-
-                    return (
-                      <div
-                        key={request.id}
-                        className="grid gap-4 rounded-2xl border border-[color:var(--border)] bg-white p-4 text-sm sm:grid-cols-[76px_minmax(0,1fr)_auto] sm:items-center"
-                      >
-                        <div className="rounded-xl bg-[#f4f7f9] px-3 py-2 text-center">
-                          <p className="text-xs font-bold text-[color:var(--muted)]">{badge.month}</p>
-                          <p className="text-3xl font-extrabold leading-none text-[#071427]">{badge.day}</p>
-                          <p className="mt-1 text-xs font-semibold text-[color:var(--muted)]">{badge.year}</p>
-                        </div>
-                        <div>
-                          <p className="font-extrabold">
-                            {formatLeaveType(request.leaveType)} request - {request.requestedAmount} hours
-                          </p>
-                          <p className="mt-2 text-[color:var(--muted)]">
-                            {request.startDate} to {request.endDate}
-                          </p>
-                          <p className="mt-1 text-[color:var(--muted)]">{request.reason}</p>
-                        </div>
-                        <div className="flex items-center gap-4 sm:flex-col sm:items-end">
-                          <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-bold capitalize text-amber-700">
-                            {request.status}
-                          </span>
-                          <span className="text-sm font-bold text-[color:var(--muted)]">v{request.version}</span>
-                        </div>
-                      </div>
-                    );
-                  })
+                  <>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                      Latest request
+                    </p>
+                    {renderRequestCard(latestRequest)}
+                    {activeRequests.length > 1 ? (
+                      <p className="text-xs font-semibold text-[color:var(--muted)]">
+                        Showing latest of {activeRequests.length} requests.
+                      </p>
+                    ) : null}
+                  </>
                 )}
               </div>
-              <div className="border-t border-[color:var(--border)] px-6 py-4 text-center">
-                <span className="font-bold text-[color:var(--accent)]">View all requests &gt;</span>
+              <div className="flex flex-col gap-3 border-t border-[color:var(--border)] px-6 py-4 text-center sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => setAllRequestsModalOpen(true)}
+                  disabled={activeRequests.length === 0}
+                  className="font-bold text-[color:var(--accent)] transition hover:text-[#064f52] disabled:cursor-not-allowed disabled:text-[color:var(--muted)]"
+                >
+                  View all requests &gt;
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetDemoData}
+                  disabled={resetMutation.isPending}
+                  className="rounded-xl border border-[color:var(--border)] bg-white px-4 py-2 text-sm font-extrabold text-[color:var(--foreground)] transition hover:border-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {resetMutation.isPending ? "Resetting..." : "Reset demo data"}
+                </button>
               </div>
             </section>
           </section>
@@ -796,6 +852,67 @@ export function EmployeeView({
             </div>
           </div>
         </aside>
+
+        {isAllRequestsModalOpen ? (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="all-requests-dialog-title"
+            className="fixed inset-0 z-50 grid place-items-center bg-[#092327]/55 p-4 backdrop-blur-sm"
+          >
+            <section className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-[color:var(--border)] bg-white p-6 shadow-[0_30px_90px_-36px_rgba(0,0,0,0.55)] sm:p-8">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-[color:var(--accent)]">
+                    Request history
+                  </p>
+                  <h2 id="all-requests-dialog-title" className="mt-3 text-2xl font-extrabold">
+                    All requests
+                  </h2>
+                  <p className="mt-3 text-sm leading-6 text-[color:var(--muted)]">
+                    {selectedEmployee?.employeeName ?? activeEmployeeId} - {activeRequests.length} total
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAllRequestsModalOpen(false)}
+                  className="grid size-10 place-items-center rounded-full border border-[color:var(--border)] bg-white text-sm font-extrabold text-[color:var(--foreground)] transition hover:border-[color:var(--accent)]"
+                  aria-label="Close all requests"
+                >
+                  X
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                {latestRequests.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-[color:var(--border)] px-4 py-8 text-sm text-[color:var(--muted)]">
+                    No requests for this employee yet.
+                  </p>
+                ) : (
+                  latestRequests.map((request) => renderRequestCard(request))
+                )}
+              </div>
+
+              <div className="mt-6 flex flex-col gap-3 border-t border-[color:var(--border)] pt-5 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={handleResetDemoData}
+                  disabled={resetMutation.isPending}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[color:var(--border)] bg-white px-5 text-sm font-extrabold text-[color:var(--foreground)] transition hover:border-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {resetMutation.isPending ? "Resetting..." : "Reset demo data"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllRequestsModalOpen(false)}
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#064f52,#159596)] px-5 text-sm font-extrabold text-white shadow-[0_18px_28px_-20px_rgba(6,79,82,0.9)] transition hover:-translate-y-0.5"
+                >
+                  Close
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         {isRequestModalOpen ? (
           <div

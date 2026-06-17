@@ -1,4 +1,4 @@
-import type { EmployeeId, LeaveType } from "./balance";
+import type { BalanceCell, EmployeeId, LeaveType } from "./balance";
 
 export type TimeOffRequestId = string;
 
@@ -64,6 +64,12 @@ export type TimeOffRequestsResponse = {
 
 export type TimeOffRequestWriteResponse = {
   request: TimeOffRequest;
+  generatedAt: string;
+};
+
+export type HcmResetResponse = {
+  balances: BalanceCell[];
+  requests: TimeOffRequest[];
   generatedAt: string;
 };
 

@@ -4,6 +4,7 @@ import { EmployeeView } from "@/app/employee-view";
 import { QueryProvider } from "@/app/query-provider";
 import { listBalances, listTimeOffRequests, resetMockHcmDb } from "@/lib/hcm/mockDb";
 import type { TimeOffRequestsResponse } from "@/lib/types/request";
+import { buildStoryHandlers } from "@/stories/storybook-hcm";
 
 const employeeIds = ["emp-1001", "emp-2002"];
 
@@ -49,10 +50,20 @@ function buildStoryProps(emptyRequests = false) {
 
 export const SeededWorkspace: Story = {
   args: buildStoryProps(),
+  parameters: {
+    msw: {
+      handlers: buildStoryHandlers(),
+    },
+  },
   render: (args) => <EmployeeView {...args} />,
 };
 
 export const EmptyRequestQueue: Story = {
   args: buildStoryProps(true),
+  parameters: {
+    msw: {
+      handlers: buildStoryHandlers(),
+    },
+  },
   render: (args) => <EmployeeView {...args} />,
 };

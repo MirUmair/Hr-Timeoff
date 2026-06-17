@@ -55,19 +55,19 @@ const requestRows = [
   {
     id: "tor-0001",
     status: "pending",
-    copy: "School break coverage · 8 hours",
+    copy: "School break coverage - 8 hours",
     tone: "bg-cyan-50 text-cyan-900 border-cyan-200",
   },
   {
     id: "tor-0002",
     status: "error",
-    copy: "Vacation overlap detected · user can retry",
+    copy: "Vacation overlap detected - user can retry",
     tone: "bg-rose-50 text-rose-900 border-rose-200",
   },
   {
     id: "tor-0003",
     status: "conflict",
-    copy: "Version drift detected · refresh required",
+    copy: "Version drift detected - refresh required",
     tone: "bg-red-50 text-red-900 border-red-200",
   },
   {
@@ -167,7 +167,7 @@ function StateBoard() {
               </p>
               <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[rgba(255,250,242,0.82)] p-4">
                 <p className="text-sm font-semibold text-[color:var(--accent)]">
-                  Maya Chen · Vacation · 8 hours
+                  Maya Chen - Vacation - 8 hours
                 </p>
                 <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
                   Per-cell HCM verification is shown before approval, and the refreshed

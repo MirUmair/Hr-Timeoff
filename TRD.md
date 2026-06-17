@@ -420,11 +420,37 @@ The assignment says Storybook interaction tests, component tests, and integratio
 
 ### Component Tests
 
-`tests/employee-view.test.tsx` and `tests/manager-view.test.tsx` cover:
+`tests/employee-view.test.tsx`, `tests/employee-view.interaction.test.tsx`, `tests/manager-view.test.tsx`, and `tests/manager-view.interaction.test.tsx` cover:
 
 - Employee balance and request rendering.
+- Employee request form interaction with `@testing-library/user-event`.
+- Optimistic pending feedback and final authoritative reconciliation.
+- Rollback, preserved form input, silent wrong mutation warning, and recoverable conflict messaging.
 - Manager queue rendering.
+- Manager request approval verification, stale-balance blocking, approve success, deny success, and conflict recovery with `@testing-library/user-event`.
 - Approval and denial controls.
+
+### Auth And Login Tests
+
+`tests/demoSession.test.ts` and `tests/login-panel.test.tsx` cover:
+
+- Dummy credential catalog behavior.
+- Demo role session lookup.
+- Employee access checks.
+- Login account selection and auto-fill behavior.
+
+### Coverage Proof
+
+`npm run test:coverage` is the proof command for the submitted test suite. The latest local verification passed:
+
+- 10 test files passed.
+- 39 tests passed.
+- Statements: 76.59%.
+- Branches: 65.46%.
+- Functions: 78.18%.
+- Lines: 76.95%.
+
+The Vitest coverage configuration uses V8 coverage and enforces 50% thresholds for statements, branches, functions, and lines. It includes `app/**/*.{ts,tsx}` and `lib/**/*.{ts,tsx}` while excluding Storybook files, route shells, loading components, error components, layouts, and pages that would dilute behavior-focused coverage. The generated proof artifacts are `coverage/index.html` and `coverage/lcov.info`.
 
 ### Browser E2E Position
 
@@ -444,8 +470,7 @@ npm run build-storybook
 Expected proof:
 
 - Lint passes.
-- Tests pass.
-- Coverage passes configured thresholds.
+- `npm run test:coverage` passes with 10 test files, 39 tests, and coverage above configured thresholds.
 - Next.js production build passes.
 - Storybook production build passes.
 

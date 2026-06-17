@@ -13,6 +13,7 @@ import {
   HcmClientError,
 } from "@/lib/hcm/hcmClient";
 import { queryKeys } from "@/lib/query/queryKeys";
+import { reconcileBalance } from "@/lib/reconciliation/reconcileBalance";
 import type {
   BalanceCell,
   BatchBalancesResponse,
@@ -97,15 +98,6 @@ function replaceRequest(
       request.id === nextRequest.id ? nextRequest : request,
     ),
   };
-}
-
-function balanceChanged(previous: BalanceCell, next: BalanceCell): boolean {
-  return (
-    previous.available !== next.available ||
-    previous.pending !== next.pending ||
-    previous.used !== next.used ||
-    previous.version !== next.version
-  );
 }
 
 function getErrorMessage(error: unknown): string {
@@ -223,20 +215,21 @@ export function ManagerView({
       request.leaveType,
       behavior === "balance-changed",
     );
+    const reconciliation = reconcileBalance(visibleBalance, latestBalance.balance);
 
     queryClient.setQueryData<BatchBalancesResponse>(
       queryKeys.balances(employeeIds),
-      replaceBalance(balancesQuery.data, latestBalance.balance),
+      replaceBalance(balancesQuery.data, reconciliation.balance),
     );
 
-    if (balanceChanged(visibleBalance, latestBalance.balance)) {
+    if (reconciliation.status !== "in-sync") {
       setRequestState((current) => ({
         ...current,
         [request.id]: {
           approvalState: "blocked",
           message:
             "Approval blocked. HCM balance changed during verification; review the refreshed balance context first.",
-          verifiedBalanceVersion: latestBalance.balance.version,
+          verifiedBalanceVersion: reconciliation.balance.version,
         },
       }));
       return;
@@ -249,7 +242,7 @@ export function ManagerView({
           approvalState: "stale",
           message:
             "Approval blocked. The queue balance was stale; it has been refreshed, so approve again after review.",
-          verifiedBalanceVersion: latestBalance.balance.version,
+          verifiedBalanceVersion: reconciliation.balance.version,
         },
       }));
       return;
