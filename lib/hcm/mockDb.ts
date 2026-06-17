@@ -87,46 +87,87 @@ function seedState(): MockDbState {
     createBalance("emp-2002", "Owen Rivera", "ldn", "London", "vacation", 40, 80),
     createBalance("emp-2002", "Owen Rivera", "ldn", "London", "sick", 32, 64),
     createBalance("emp-2002", "Owen Rivera", "ldn", "London", "personal", 8, 16),
+    createBalance("emp-3003", "Sofia Patel", "aus", "Austin", "vacation", 64, 112),
+    createBalance("emp-3003", "Sofia Patel", "aus", "Austin", "sick", 40, 72),
+    createBalance("emp-3003", "Sofia Patel", "aus", "Austin", "personal", 20, 32),
+    createBalance("emp-4004", "Leo Morgan", "tor", "Toronto", "vacation", 56, 96),
+    createBalance("emp-4004", "Leo Morgan", "tor", "Toronto", "sick", 36, 64),
+    createBalance("emp-4004", "Leo Morgan", "tor", "Toronto", "personal", 12, 24),
   ];
 
   for (const balance of seededBalances) {
     balances.set(balanceKey(balance.employeeId, balance.leaveType), balance);
   }
 
-  const seededRequest: TimeOffRequest = {
-    id: "tor-0001",
-    employeeId: defaultEmployeeId,
-    leaveType: "vacation",
-    startDate: "2026-07-01",
-    endDate: "2026-07-03",
-    requestedAmount: 8,
-    status: "pending",
-    reason: "School break coverage",
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-    version: 1,
-    clientMutationId: null,
-  };
-  const seededRequestBalance = balances.get(
-    balanceKey(seededRequest.employeeId, seededRequest.leaveType),
-  );
+  const seededRequests: TimeOffRequest[] = [
+    {
+      id: "tor-0001",
+      employeeId: defaultEmployeeId,
+      leaveType: "vacation",
+      startDate: "2026-07-01",
+      endDate: "2026-07-03",
+      requestedAmount: 8,
+      status: "pending",
+      reason: "School break coverage",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      version: 1,
+      clientMutationId: null,
+    },
+    {
+      id: "tor-0002",
+      employeeId: "emp-2002",
+      leaveType: "sick",
+      startDate: "2026-07-09",
+      endDate: "2026-07-10",
+      requestedAmount: 8,
+      status: "pending",
+      reason: "Flu recovery",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      version: 1,
+      clientMutationId: null,
+    },
+    {
+      id: "tor-0003",
+      employeeId: "emp-3003",
+      leaveType: "personal",
+      startDate: "2026-07-14",
+      endDate: "2026-07-14",
+      requestedAmount: 4,
+      status: "pending",
+      reason: "Registration appointment",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      version: 1,
+      clientMutationId: null,
+    },
+  ];
 
-  if (seededRequestBalance) {
-    balances.set(
+  for (const seededRequest of seededRequests) {
+    const seededRequestBalance = balances.get(
       balanceKey(seededRequest.employeeId, seededRequest.leaveType),
-      bumpBalance(
-        seededRequestBalance,
-        -seededRequest.requestedAmount,
-        seededRequest.requestedAmount,
-        0,
-      ),
     );
+
+    if (seededRequestBalance) {
+      balances.set(
+        balanceKey(seededRequest.employeeId, seededRequest.leaveType),
+        bumpBalance(
+          seededRequestBalance,
+          -seededRequest.requestedAmount,
+          seededRequest.requestedAmount,
+          0,
+        ),
+      );
+    }
   }
 
   return {
     balances,
-    requests: new Map<string, TimeOffRequest>([[seededRequest.id, seededRequest]]),
-    nextRequestNumber: 2,
+    requests: new Map<string, TimeOffRequest>(
+      seededRequests.map((seededRequest) => [seededRequest.id, seededRequest]),
+    ),
+    nextRequestNumber: seededRequests.length + 1,
   };
 }
 

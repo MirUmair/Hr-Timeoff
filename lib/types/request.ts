@@ -69,6 +69,8 @@ export type TimeOffRequestWriteResponse = {
 
 export type HcmErrorCode =
   | "BAD_REQUEST"
+  | "AUTHENTICATION_REQUIRED"
+  | "FORBIDDEN"
   | "NOT_FOUND"
   | "INSUFFICIENT_BALANCE"
   | "CONFLICT";

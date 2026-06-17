@@ -1,3 +1,9 @@
+import {
+  authErrorResponse,
+  canAccessEmployee,
+  type DemoSession,
+  requireRouteSession,
+} from "@/lib/auth/demoSession";
 import { isLeaveType, listBalances } from "@/lib/hcm/mockDb";
 import type { BatchBalancesRequest, EmployeeId, LeaveType } from "@/lib/types/balance";
 import type { HcmErrorResponse } from "@/lib/types/request";
@@ -57,7 +63,30 @@ function parseCsv(value: string | null): string[] | undefined {
     .filter((item) => item.length > 0);
 }
 
+function authorizeEmployeeIds(
+  session: DemoSession,
+  employeeIds?: string[],
+): EmployeeId[] | Response | undefined {
+  if (!employeeIds) {
+    return session.role === "employee" ? session.employeeIds : undefined;
+  }
+
+  const parsedEmployeeIds = employeeIds as EmployeeId[];
+
+  if (!parsedEmployeeIds.every((employeeId) => canAccessEmployee(session, employeeId))) {
+    return authErrorResponse(403, "You cannot read another employee balance corpus.");
+  }
+
+  return parsedEmployeeIds;
+}
+
 export function GET(request: Request): Response {
+  const session = requireRouteSession(request);
+
+  if (session instanceof Response) {
+    return session;
+  }
+
   const url = new URL(request.url);
   const employeeIds = parseCsv(url.searchParams.get("employeeIds"));
   const rawLeaveTypes = parseCsv(url.searchParams.get("leaveTypes"));
@@ -67,15 +96,27 @@ export function GET(request: Request): Response {
     return badRequest("One or more leave types are not supported.", "leaveTypes");
   }
 
+  const authorizedEmployeeIds = authorizeEmployeeIds(session, employeeIds);
+
+  if (authorizedEmployeeIds instanceof Response) {
+    return authorizedEmployeeIds;
+  }
+
   return Response.json(
     listBalances({
-      employeeIds,
+      employeeIds: authorizedEmployeeIds,
       leaveTypes,
     }),
   );
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const session = requireRouteSession(request);
+
+  if (session instanceof Response) {
+    return session;
+  }
+
   const body = (await request.json()) as unknown;
 
   if (!isRecord(body)) {
@@ -94,8 +135,18 @@ export async function POST(request: Request): Promise<Response> {
     return badRequest("leaveTypes must contain only supported leave types.", "leaveTypes");
   }
 
+  const authorizedEmployeeIds = authorizeEmployeeIds(session, employeeIds);
+
+  if (authorizedEmployeeIds instanceof Response) {
+    return authorizedEmployeeIds;
+  }
+
+  if (!authorizedEmployeeIds) {
+    return badRequest("employeeIds must be a non-empty string array.", "employeeIds");
+  }
+
   const input: BatchBalancesRequest = {
-    employeeIds: employeeIds as EmployeeId[],
+    employeeIds: authorizedEmployeeIds,
     leaveTypes,
   };
 

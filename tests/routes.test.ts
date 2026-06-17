@@ -5,7 +5,18 @@ import { GET as getBatchBalancesRoute, POST as postBatchBalancesRoute } from "@/
 import { POST as postManagerApproveRoute } from "@/app/api/hcm/manager/approve/route";
 import { POST as postManagerDenyRoute } from "@/app/api/hcm/manager/deny/route";
 import { GET as getRequestsRoute, POST as postRequestsRoute } from "@/app/api/hcm/time-off-requests/route";
+import {
+  AUTH_COOKIE_NAME,
+  type AuthRole,
+  getSessionTokenForRole,
+} from "@/lib/auth/demoSession";
 import { resetMockHcmDb } from "@/lib/hcm/mockDb";
+
+function authHeaders(role: AuthRole, init?: HeadersInit): Headers {
+  const headers = new Headers(init);
+  headers.set("cookie", `${AUTH_COOKIE_NAME}=${getSessionTokenForRole(role)}`);
+  return headers;
+}
 
 describe("HCM routes", () => {
   beforeEach(() => {
@@ -14,7 +25,9 @@ describe("HCM routes", () => {
 
   it("rejects invalid authoritative balance requests", async () => {
     const response = getAuthoritativeBalanceRoute(
-      new Request("http://localhost/api/hcm/balance?employeeId=emp-1001"),
+      new Request("http://localhost/api/hcm/balance?employeeId=emp-1001", {
+        headers: authHeaders("employee"),
+      }),
     );
 
     expect(response.status).toBe(400);
@@ -28,7 +41,9 @@ describe("HCM routes", () => {
 
   it("rejects invalid batch balance filters", async () => {
     const response = getBatchBalancesRoute(
-      new Request("http://localhost/api/hcm/balances?leaveTypes=vacation,unknown"),
+      new Request("http://localhost/api/hcm/balances?leaveTypes=vacation,unknown", {
+        headers: authHeaders("manager"),
+      }),
     );
 
     expect(response.status).toBe(400);
@@ -44,9 +59,9 @@ describe("HCM routes", () => {
     const createdResponse = await postRequestsRoute(
       new Request("http://localhost/api/hcm/time-off-requests", {
         method: "POST",
-        headers: {
+        headers: authHeaders("employee", {
           "content-type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           employeeId: "emp-1001",
           leaveType: "sick",
@@ -68,9 +83,9 @@ describe("HCM routes", () => {
     const approvalResponse = await postManagerApproveRoute(
       new Request("http://localhost/api/hcm/manager/approve", {
         method: "POST",
-        headers: {
+        headers: authHeaders("manager", {
           "content-type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           requestId: createdPayload.request.id,
           managerId: "mgr-9001",
@@ -87,7 +102,9 @@ describe("HCM routes", () => {
     expect(approvalPayload.request.version).toBeGreaterThan(createdPayload.request.version);
 
     const requestsResponse = getRequestsRoute(
-      new Request("http://localhost/api/hcm/time-off-requests?employeeId=emp-1001"),
+      new Request("http://localhost/api/hcm/time-off-requests?employeeId=emp-1001", {
+        headers: authHeaders("employee"),
+      }),
     );
     const requestsPayload = (await requestsResponse.json()) as {
       requests: Array<{ id: string; status: string }>;
@@ -100,9 +117,9 @@ describe("HCM routes", () => {
     const createdResponse = await postRequestsRoute(
       new Request("http://localhost/api/hcm/time-off-requests", {
         method: "POST",
-        headers: {
+        headers: authHeaders("employee", {
           "content-type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           employeeId: "emp-1001",
           leaveType: "personal",
@@ -123,9 +140,9 @@ describe("HCM routes", () => {
     const denialResponse = await postManagerDenyRoute(
       new Request("http://localhost/api/hcm/manager/deny", {
         method: "POST",
-        headers: {
+        headers: authHeaders("manager", {
           "content-type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           requestId: createdPayload.request.id,
           managerId: "mgr-9001",
@@ -148,9 +165,9 @@ describe("HCM routes", () => {
     const response = await postBatchBalancesRoute(
       new Request("http://localhost/api/hcm/balances", {
         method: "POST",
-        headers: {
+        headers: authHeaders("manager", {
           "content-type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           employeeIds: ["emp-1001", "emp-2002"],
         }),
@@ -161,5 +178,64 @@ describe("HCM routes", () => {
     const payload = (await response.json()) as { balances: Array<{ employeeId: string }> };
     expect(payload.balances).toHaveLength(6);
     expect(payload.balances.map((balance) => balance.employeeId)).toContain("emp-1001");
+  });
+
+  it("rejects unauthenticated manager decisions", async () => {
+    const response = await postManagerApproveRoute(
+      new Request("http://localhost/api/hcm/manager/approve", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          requestId: "tor-1001",
+          managerId: "mgr-9001",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "AUTHENTICATION_REQUIRED",
+      },
+    });
+  });
+
+  it("rejects employee sessions on manager decisions", async () => {
+    const response = await postManagerApproveRoute(
+      new Request("http://localhost/api/hcm/manager/approve", {
+        method: "POST",
+        headers: authHeaders("employee", {
+          "content-type": "application/json",
+        }),
+        body: JSON.stringify({
+          requestId: "tor-1001",
+          managerId: "mgr-9001",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+      },
+    });
+  });
+
+  it("prevents employees from reading another employee balance", async () => {
+    const response = getAuthoritativeBalanceRoute(
+      new Request("http://localhost/api/hcm/balance?employeeId=emp-2002&leaveType=vacation", {
+        headers: authHeaders("employee"),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+      },
+    });
   });
 });

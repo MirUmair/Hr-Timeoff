@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { EmployeeView } from "@/app/employee-view";
@@ -39,5 +39,11 @@ describe("EmployeeView", () => {
     expect(screen.getByText(/New York.*emp-1001/)).toBeInTheDocument();
     expect(screen.getByText(/School break coverage/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Submit request" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit request" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "New time off request" }),
+    ).toBeInTheDocument();
   });
 });

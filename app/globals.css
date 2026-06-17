@@ -1,22 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #eef4f8;
-  --foreground: #102331;
-  --surface: rgba(255, 255, 255, 0.94);
-  --surface-strong: rgba(247, 251, 253, 0.98);
-  --surface-muted: #e4edf3;
-  --border: #d6e3eb;
-  --border-strong: #8faec0;
-  --accent: #0b4a5f;
-  --accent-soft: #dff3f0;
-  --accent-warm: #c65f2d;
-  --muted: #617786;
-  --shadow: 0 28px 60px -42px rgba(12, 38, 54, 0.42);
-  --shadow-soft: 0 18px 42px -34px rgba(12, 38, 54, 0.34);
+  --background: #f4efe7;
+  --foreground: #092327;
+  --surface: rgba(255, 252, 247, 0.92);
+  --surface-strong: rgba(255, 251, 244, 0.98);
+  --surface-muted: #eee5d8;
+  --border: #ddd0c1;
+  --border-strong: #b89f86;
+  --accent: #064f52;
+  --accent-soft: #dbeee9;
+  --accent-warm: #9a5b32;
+  --muted: #5c6b70;
+  --shadow: 0 28px 70px -48px rgba(58, 41, 22, 0.48);
+  --shadow-soft: 0 18px 46px -36px rgba(58, 41, 22, 0.38);
   --font-ui-sans: "Aptos", "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;
   --font-ui-mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --font-display-stack: "Bahnschrift", "Aptos Display", "Segoe UI Variable Display", "Trebuchet MS", sans-serif;
+  --font-display-stack: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
 }
 
 @theme inline {
@@ -39,10 +39,10 @@ body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.98), transparent 31%),
-    radial-gradient(circle at 92% 8%, rgba(33, 122, 143, 0.16), transparent 26%),
-    radial-gradient(circle at 10% 95%, rgba(198, 95, 45, 0.1), transparent 26%),
-    linear-gradient(180deg, #f6fbfe 0%, #eef4f8 48%, #e6eff5 100%);
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.92), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgba(6, 79, 82, 0.11), transparent 26%),
+    radial-gradient(circle at 10% 100%, rgba(154, 91, 50, 0.1), transparent 28%),
+    linear-gradient(180deg, #f9f4ec 0%, #f4efe7 50%, #efe6dc 100%);
   color: var(--foreground);
   font-family: var(--font-ui-sans);
   text-rendering: optimizeLegibility;
@@ -55,21 +55,21 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(12, 74, 95, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(12, 74, 95, 0.06) 1px, transparent 1px);
-  background-size: 36px 36px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.08) 68%, transparent);
-  opacity: 0.85;
+    linear-gradient(rgba(58, 41, 22, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(58, 41, 22, 0.03) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.04) 70%, transparent);
+  opacity: 0.78;
 }
 
 body::after {
   content: "";
   position: fixed;
   inset: 0 auto 0 0;
-  width: 7px;
+  width: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, #0b4a5f, #1e8a9a 44%, #c65f2d);
-  box-shadow: 0 0 34px rgba(30, 138, 154, 0.28);
+  background: transparent;
+  box-shadow: none;
 }
 
 a {
@@ -84,7 +84,7 @@ select {
 }
 
 ::selection {
-  background: rgba(30, 138, 154, 0.2);
+  background: rgba(6, 79, 82, 0.18);
   color: var(--foreground);
 }
 

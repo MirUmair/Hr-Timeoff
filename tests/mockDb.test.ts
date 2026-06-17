@@ -16,11 +16,13 @@ describe("mockDb", () => {
   });
 
   it("seeds the employee balance grid and the pending request", () => {
+    const allBalances = listBalances();
     const balances = listBalances({ employeeIds: ["emp-1001", "emp-2002"] });
     const vacation = balances.balances.find(
       (balance) => balance.employeeId === "emp-1001" && balance.leaveType === "vacation",
     );
 
+    expect(allBalances.balances).toHaveLength(12);
     expect(balances.balances).toHaveLength(6);
     expect(vacation).toMatchObject({
       available: 72,
@@ -36,6 +38,13 @@ describe("mockDb", () => {
       id: "tor-0001",
       status: "pending",
       leaveType: "vacation",
+    });
+
+    const sofiaRequests = listTimeOffRequests("emp-3003");
+    expect(sofiaRequests.requests[0]).toMatchObject({
+      id: "tor-0003",
+      status: "pending",
+      leaveType: "personal",
     });
   });
 

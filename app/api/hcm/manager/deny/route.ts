@@ -1,3 +1,4 @@
+import { authErrorResponse, requireRouteRole } from "@/lib/auth/demoSession";
 import { denyTimeOffRequest } from "@/lib/hcm/mockDb";
 import type {
   DenyTimeOffRequestInput,
@@ -72,10 +73,20 @@ function parseInput(body: unknown): DenyTimeOffRequestInput | Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const session = requireRouteRole(request, "manager");
+
+  if (session instanceof Response) {
+    return session;
+  }
+
   const input = parseInput((await request.json()) as unknown);
 
   if (input instanceof Response) {
     return input;
+  }
+
+  if (input.managerId !== session.userId) {
+    return authErrorResponse(403, "Manager ID must match the signed-in manager session.");
   }
 
   const result = denyTimeOffRequest(input);

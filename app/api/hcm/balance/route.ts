@@ -1,4 +1,9 @@
 import {
+  authErrorResponse,
+  canAccessEmployee,
+  requireRouteSession,
+} from "@/lib/auth/demoSession";
+import {
   defaultMockEmployeeId,
   getAuthoritativeBalance,
   isLeaveType,
@@ -21,6 +26,12 @@ function badRequest(message: string, field?: string): Response {
 }
 
 export function GET(request: Request): Response {
+  const session = requireRouteSession(request);
+
+  if (session instanceof Response) {
+    return session;
+  }
+
   const url = new URL(request.url);
   const employeeId = (url.searchParams.get("employeeId") ??
     defaultMockEmployeeId()) as EmployeeId;
@@ -28,6 +39,10 @@ export function GET(request: Request): Response {
 
   if (!rawLeaveType || !isLeaveType(rawLeaveType)) {
     return badRequest("A supported leaveType query parameter is required.", "leaveType");
+  }
+
+  if (!canAccessEmployee(session, employeeId)) {
+    return authErrorResponse(403, "You cannot read another employee balance.");
   }
 
   const result = getAuthoritativeBalance(

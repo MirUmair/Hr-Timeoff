@@ -20,13 +20,14 @@ The take-home asks for:
 - Let employees submit time-off requests with immediate optimistic feedback.
 - Keep HCM authoritative by reconciling optimistic state after mutations.
 - Let managers approve or deny pending requests only with current balance context.
+- Separate employee and manager workspaces with demo role-based authorization.
 - Model stale reads, conflicts, insufficient balance, anniversary bonuses, and silent wrong mutations.
 - Provide Storybook proof for critical states, not only happy paths.
 - Provide tests that future contributors cannot silently break.
 
 ## 3. Non-Goals And Scope Boundaries
 
-- No real authentication or authorization.
+- No production identity provider, password storage, SSO, or durable auth backend. The app includes dummy credentials and a demo httpOnly role session so employee/manager authorization boundaries are exercised.
 - No real HCM vendor integration.
 - No durable database persistence.
 - No full HR platform or complete policy engine.
@@ -74,6 +75,7 @@ The implementation uses a small full-stack Next.js App Router app:
 - Next.js route handlers simulate HCM.
 - Domain behavior lives in `lib/hcm/mockDb.ts`.
 - Typed client functions live in `lib/hcm/hcmClient.ts`.
+- Demo role sessions and dummy credential accounts live in `lib/auth/*` and guard employee and manager routes.
 - Shared query keys live in `lib/query/queryKeys.ts`.
 - Storybook stories document important workflow states.
 - Vitest and Testing Library cover domain, route, client, reconciliation, and component behavior.
@@ -84,11 +86,19 @@ The implementation uses a small full-stack Next.js App Router app:
 
 - `app/page.tsx`
   - Fetches initial employee balances and requests.
+  - Requires an employee demo session.
   - Renders `EmployeeView`.
+- `app/login/page.tsx`
+  - Lets reviewers auto-fill dummy credentials for four student employee accounts and one manager account.
+- `app/logout/route.ts`
+  - Clears the demo session cookie.
+- `app/auth-badge.tsx`
+  - Shows the active demo role and logout control.
 - `app/employee-view.tsx`
   - Client component for balances, request history, request form, optimistic submission, and reconciliation messages.
 - `app/manager/page.tsx`
   - Fetches initial manager queue data.
+  - Requires a manager demo session.
   - Renders `ManagerView`.
 - `app/manager/manager-view.tsx`
   - Client component for approval queue, balance verification, approve, deny, stale/conflict recovery, and decision confirmations.
@@ -109,6 +119,8 @@ The implementation uses a small full-stack Next.js App Router app:
   - Request lifecycle and mutation input contracts.
 - `lib/reconciliation/reconcileBalance.ts`
   - Reconciliation helper for optimistic and authoritative balance comparison.
+- `lib/auth/demoSession.ts`, `lib/auth/serverSession.ts`
+  - Static dummy credential catalog, demo session lookup, route guards, API cookie parsing, and role checks.
 
 ### Storybook Layer
 
@@ -181,6 +193,10 @@ Implemented endpoints:
   - Manager approval decision.
 - `POST /api/hcm/manager/deny`
   - Manager denial decision.
+
+All HCM route handlers require a valid demo session cookie. Employee sessions can read and mutate only their own employee record. Manager decision routes require the manager role and reject request bodies whose `managerId` does not match the signed-in manager session.
+
+The demo login roster includes Maya Chen, Owen Rivera, Sofia Patel, and Leo Morgan as student employee accounts, plus Avery Brooks as the manager. The login page displays dummy usernames and passwords and provides auto-fill controls so reviewers can quickly switch sessions while still exercising credential validation and role-based authorization.
 
 Supported scenarios:
 
@@ -383,6 +399,8 @@ The assignment says Storybook interaction tests, component tests, and integratio
 - Request creation.
 - Approval route behavior.
 - Denial route behavior.
+- Authentication-required, wrong-role, and cross-employee authorization failures.
+- Dummy credential lookup and account catalog behavior.
 
 ### Client Tests
 
@@ -456,12 +474,14 @@ Mitigation: Include insufficient balance, conflict, denial, anniversary bonus, r
 ## 20. Acceptance Criteria
 
 - Employee can view per-location balances.
+- Employee and manager workspaces are separated by dummy credential demo login.
 - Employee can submit a time-off request with optimistic pending feedback.
 - Failed employee mutations roll back and preserve form input.
 - HCM remains the source of truth after reconciliation.
 - Manager can approve pending requests with fresh balance verification.
 - Manager can deny pending requests and release pending balance.
 - Mock HCM supports batch reads, per-cell reads, create, approve, deny, anniversary bonus, insufficient balance, conflict, and silent wrong mutation.
+- Mock HCM routes reject missing sessions, wrong roles, and cross-employee access.
 - Storybook documents meaningful UI states.
 - Test suite covers domain, route, client, reconciliation, and component behavior.
 - Project builds successfully with Next.js and Storybook.

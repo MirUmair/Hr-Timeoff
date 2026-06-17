@@ -1,4 +1,9 @@
 import {
+  authErrorResponse,
+  canAccessEmployee,
+  requireRouteSession,
+} from "@/lib/auth/demoSession";
+import {
   createTimeOffRequest,
   isLeaveType,
   listTimeOffRequests,
@@ -105,17 +110,49 @@ function parseInput(body: unknown): CreateTimeOffRequestInput | Response {
 }
 
 export function GET(request: Request): Response {
+  const session = requireRouteSession(request);
+
+  if (session instanceof Response) {
+    return session;
+  }
+
   const url = new URL(request.url);
   const employeeId = url.searchParams.get("employeeId") as EmployeeId | null;
 
-  return Response.json(listTimeOffRequests(employeeId ?? undefined));
+  if (employeeId) {
+    if (!canAccessEmployee(session, employeeId)) {
+      return authErrorResponse(403, "You cannot read another employee request history.");
+    }
+
+    return Response.json(listTimeOffRequests(employeeId));
+  }
+
+  if (session.role === "manager") {
+    return Response.json(listTimeOffRequests());
+  }
+
+  return Response.json(listTimeOffRequests(session.userId));
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const session = requireRouteSession(request);
+
+  if (session instanceof Response) {
+    return session;
+  }
+
   const input = parseInput((await request.json()) as unknown);
 
   if (input instanceof Response) {
     return input;
+  }
+
+  if (session.role !== "employee") {
+    return authErrorResponse(403, "Employee access is required to create time-off requests.");
+  }
+
+  if (!canAccessEmployee(session, input.employeeId)) {
+    return authErrorResponse(403, "You cannot create requests for another employee.");
   }
 
   const result = createTimeOffRequest(input);

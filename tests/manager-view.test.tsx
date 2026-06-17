@@ -38,8 +38,8 @@ describe("ManagerView", () => {
     expect(screen.getByText("Approval queue")).toBeInTheDocument();
     expect(screen.getByText("Verify latest HCM balance before every approval.")).toBeInTheDocument();
     expect(screen.getByText(/School break coverage/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Verify and approve" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Deny request" })).toBeEnabled();
-    expect(screen.getByRole("combobox", { name: /HCM approval behavior/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Verify and approve" })[0]).toBeEnabled();
+    expect(screen.getAllByRole("button", { name: "Deny request" })[0]).toBeEnabled();
+    expect(screen.getAllByRole("combobox", { name: /HCM approval behavior/i })[0]).toBeInTheDocument();
   });
 });
